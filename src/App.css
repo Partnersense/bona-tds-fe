@@ -1,0 +1,243 @@
+/* General Styling */
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f7f7f8;
+  color: #333;
+}
+
+.container {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Pane Styling */
+.pane {
+  padding: 20px;
+  border-right: 1px solid #e0e0e0;
+  overflow-y: auto;
+  background-color: #fff;
+}
+
+.pane:first-of-type {
+  flex: 0 0 15%;
+}
+
+.pane:nth-of-type(2) {
+  flex: 0 0 15%;
+}
+
+.pane:last-of-type {
+  flex: 1 1 70%;
+}
+
+/* Heading Styles */
+.pane h2 {
+  font-size: 16px;
+  margin-bottom: 10px;
+  font-weight: 500;
+  color: #4a4a4a;
+}
+
+/* List Styles */
+.pane ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pane ul li {
+  padding: 10px;
+  margin-bottom: 5px;
+  cursor: pointer;
+  border-radius: 4px;
+  background-color: #fff;
+  transition: background-color 0.2s ease;
+  color: #333;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.pane ul li:hover {
+  background-color: #f0f0f0;
+  color: #1a73e8;
+}
+
+.pane ul li.selected {
+  background-color: #e8f0fe;
+  color: #1a73e8;
+  font-weight: 500;
+}
+
+/* Options Styling */
+.options-list {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 0 0;
+}
+
+.options-list .option {
+  cursor: pointer;
+  padding: 8px;
+  margin-bottom: 5px;
+  border-radius: 4px;
+  background-color: #fff;
+  transition: background-color 0.2s ease;
+  color: #333;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.options-list .option:hover {
+  background-color: #f0f0f0;
+  color: #1a73e8;
+}
+
+.options-list .icon {
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+/* Translation Table Styling */
+.translations-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+}
+
+.translations-table th,
+.translations-table td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.translations-table th {
+  background-color: #f7f7f8;
+  font-weight: 500;
+  color: #333;
+}
+
+/* Button and Textarea Styles */
+textarea.large-textarea {
+  width: 100%;
+  height: 300px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #333;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #fafafa;
+  resize: none;
+  margin-top: 10px;
+}
+
+.save-button {
+  background-color: #1a73e8;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  margin: 20px 0;
+}
+
+.save-button:hover {
+  background-color: #1558c4;
+}
+
+/* Add Translation Button */
+.add-translation-button {
+  background-color: #6c757d;
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  margin-top: 10px;
+}
+
+.add-translation-button:hover {
+  background-color: #5a6268;
+}
+
+/* Tab Button Styles */
+.tabs button {
+  background-color: transparent;
+  border: none;
+  color: #333;
+  font-size: 14px;
+  padding: 8px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.3s ease, border-bottom-color 0.3s ease;
+  margin: 0 5px;
+}
+
+.tabs button:hover,
+.tabs button.active {
+  color: #1a73e8;
+  border-bottom-color: #1a73e8;
+}
+
+/* Additional Styling for Switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+  margin-right: 10px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.4s;
+  border-radius: 34px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 12px;
+  width: 12px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #1a73e8;
+}
+
+input:checked + .slider:before {
+  transform: translateX(18px);
+}
+
+/* Margin and Padding Adjustments */
+.pane-details .tab-content > div,
+.settings-container,
+.translations-container,
+.pane-details button.save-button,
+.pane-details .add-translation-button {
+  margin: 20px 0;
+}
