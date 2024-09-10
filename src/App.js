@@ -13,6 +13,7 @@ import {
   faPalette,
   faLanguage,
   faCogs,
+  faTrash, faSave, faCheck
 } from '@fortawesome/free-solid-svg-icons';
 
 const accountUrl = 'https://tdsassets.table.core.windows.net';
@@ -46,12 +47,18 @@ const App = () => {
   const [newMarketIdentifier, setNewMarketIdentifier] = useState('');
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState({ message: '', type: '' });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [payloadFilter, setPayloadFilter] = useState('');
+  const [continuationToken, setContinuationToken] = useState(null);
+  const [prevContinuationTokens, setPrevContinuationTokens] = useState([]);
+
 
   const showNotification = (message, type = 'success') => {
     setNotification({ message, type });
     setTimeout(() => {
       setNotification({ message: '', type: '' });
-    }, 3000); // Hide notification after 3 seconds
+    }, 3000);
   };
 
   const categoriesClient = useMemo(
@@ -76,31 +83,8 @@ const App = () => {
   }, [selectedCategory]);
 
   useEffect(() => {
-    fetchHistory(status, startDate, endDate);
-  }, [status, startDate, endDate]);
-
-
-  const handleStartRegeneration = async () => {
-    try {
-      const newHistoryRecord = {
-        partitionKey: 'History',
-        rowKey: `${Date.now()}`, // Use current timestamp as a unique row key
-        Status: 'Started',
-        Payload: 'Regeneration process started',
-        Timestamp: new Date().toISOString(), // Add current DateTime
-      };
-
-      await historyClient.createEntity(newHistoryRecord);
-      setHistory([...history, newHistoryRecord]); // Update state with new record
-      showNotification('Regeneration started and recorded in history.', 'success');
-    } catch (error) {
-      console.error('Error saving history record:', error);
-      showNotification('Failed to save history record. Please try again.', 'error');
-    }
-  };
-
-
-
+    fetchHistory(status, startDate, endDate, payloadFilter, currentPage, itemsPerPage);
+  }, [status, startDate, endDate, payloadFilter, currentPage, itemsPerPage]);
 
   const fetchCategories = async () => {
     setLoading(true);
@@ -153,15 +137,24 @@ const App = () => {
     }
   };
 
-  const fetchHistory = async (statusFilter, start, end) => {
+  const fetchHistory = async (statusFilter, start, end, payloadFilter, pageSize) => {
     setLoading(true);
     try {
       let filterQuery = odata`Timestamp ge datetime'${start.toISOString()}' and Timestamp le datetime'${end.toISOString()}'`;
       if (statusFilter !== 'All') {
         filterQuery += odata` and Status eq '${statusFilter}'`;
       }
+      if (payloadFilter) {
+        // You will need to change 'contains' to a valid odata query as Azure Table does not support 'contains'
+        filterQuery += odata` and Payload eq '${payloadFilter}'`;
+      }
 
-      const entities = historyClient.listEntities({ queryOptions: { filter: filterQuery } });
+      const entities = await historyClient.listEntities({
+        queryOptions: { filter: filterQuery },
+        top: pageSize,
+        continuationToken,
+      });
+
       const historyList = [];
       for await (const entity of entities) {
         historyList.push({
@@ -169,9 +162,11 @@ const App = () => {
           rowKey: entity.rowKey || 'missing',
           Status: entity.Status || 'N/A',
           Payload: entity.Payload || 'N/A',
+          Timestamp: entity.Timestamp || 'N/A',
         });
       }
       setHistory(historyList);
+      setContinuationToken(entities.continuationToken || null);
     } catch (error) {
       console.error('Error fetching history:', error);
     } finally {
@@ -179,8 +174,44 @@ const App = () => {
     }
   };
 
-  const generateUniqueKey = (partitionKey, rowKey) => {
-    return `${partitionKey || 'missing'}-${rowKey || 'missing'}`;
+  const handleNextPage = () => {
+    if (continuationToken) {
+      // Save the current continuation token to enable 'Previous' functionality
+      setPrevContinuationTokens([...prevContinuationTokens, continuationToken]);
+      fetchHistory(status, startDate, endDate, payloadFilter, itemsPerPage);
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      const tokens = [...prevContinuationTokens];
+      const prevToken = tokens.pop();
+      setPrevContinuationTokens(tokens);
+      setContinuationToken(prevToken);
+      fetchHistory(status, startDate, endDate, payloadFilter, itemsPerPage);
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+
+  const handleStartRegeneration = async () => {
+    try {
+      const newHistoryRecord = {
+        partitionKey: 'History',
+        rowKey: `${Date.now()}`,
+        Status: 'Started',
+        Payload: 'Regeneration process started',
+        Timestamp: new Date().toISOString(),
+      };
+
+      await historyClient.createEntity(newHistoryRecord);
+      setHistory([...history, newHistoryRecord]);
+      showNotification('Regeneration started and recorded in history.', 'success');
+    } catch (error) {
+      console.error('Error saving history record:', error);
+      showNotification('Failed to save history record. Please try again.', 'error');
+    }
   };
 
   const handleSaveCategory = async (index) => {
@@ -319,13 +350,13 @@ const App = () => {
   const handleSaveMarket = async (index) => {
     if (index === null || index < 0 || index >= markets.length) {
       console.error('Invalid market index:', index);
-      showNotification('An issue occured while saving Market', 'error');
+      showNotification('An issue occurred while saving Market', 'error');
       return;
     }
 
     const market = markets[index];
     if (!market) {
-      showNotification('An issue occured while saving Market', 'error');
+      showNotification('An issue occurred while saving Market', 'error');
       console.error('Market not found at index:', index);
       return;
     }
@@ -354,14 +385,14 @@ const App = () => {
       });
     } catch (error) {
       console.error('Error updating market:', error.message);
-      showNotification('An issue occured while updating Market', 'error');
+      showNotification('An issue occurred while updating Market', 'error');
     }
   };
 
   const handleEditMarket = (index) => {
     if (index === null || index < 0 || index >= markets.length) {
       console.error('Invalid market index:', index);
-      showNotification('An issue occured while saving Market', 'error');
+      showNotification('An issue occurred while saving Market', 'error');
       return;
     }
 
@@ -378,7 +409,7 @@ const App = () => {
   const handleDeleteMarket = async (index) => {
     if (index < 0 || index >= markets.length) {
       console.error('Invalid market index');
-      showNotification('An issue occured while deleting Market', 'error');
+      showNotification('An issue occurred while deleting Market', 'error');
       return;
     }
 
@@ -392,7 +423,7 @@ const App = () => {
       showNotification('Market deleted', 'success');
     } catch (error) {
       console.error('Error deleting market:', error);
-      showNotification('An issue occured while deleting Market', 'error');
+      showNotification('An issue occurred while deleting Market', 'error');
     }
   };
 
@@ -498,6 +529,10 @@ const App = () => {
     setGeneralSettingsTab(0);
   };
 
+  const generateUniqueKey = (partitionKey, rowKey) => {
+    return `${partitionKey || 'missing'}-${rowKey || 'missing'}`;
+  };
+
   return (
       <div className="App">
         <div className="container mx-auto p-4 grid grid-cols-12 gap-4">
@@ -541,7 +576,7 @@ const App = () => {
                   }`}
                   onClick={handleGeneralSettingsClick}
               >
-                <span className="mr-2">⚙️</span> General Settings
+                <FontAwesomeIcon icon={faCogs} className="mr-2"/> General Settings {/* Updated icon */}
               </li>
             </ul>
           </div>
@@ -636,6 +671,7 @@ const App = () => {
                                         dateFormat="yyyy-MM-dd h:mm aa"
                                         className="border border-gray-300 rounded px-2 py-1"
                                     />
+                                    <span className="mx-2">to</span>
                                     <DatePicker
                                         selected={endDate}
                                         onChange={(date) => setEndDate(date)}
@@ -647,7 +683,6 @@ const App = () => {
                                         dateFormat="yyyy-MM-dd h:mm aa"
                                         className="border border-gray-300 rounded px-2 py-1"
                                     />
-
                                   </div>
                                 </div>
                                 <button
@@ -656,12 +691,54 @@ const App = () => {
                                       setStatus('All');
                                       setStartDate(new Date());
                                       setEndDate(new Date());
+                                      setPayloadFilter('');
                                     }}
                                 >
                                   Clear
                                 </button>
                               </div>
-                              <div className="overflow-auto">
+                              <div className="flex justify-between items-center mt-4">
+                                <div>
+                                  <label className="block text-sm font-medium">Filter by Payload</label>
+                                  <input
+                                      type="text"
+                                      value={payloadFilter}
+                                      onChange={(e) => setPayloadFilter(e.target.value)}
+                                      placeholder="Filter Payload"
+                                      className="border border-gray-300 rounded p-2"
+                                  />
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <button
+                                      className={`px-3 py-1 rounded ${currentPage === 1 ? 'bg-gray-300' : 'bg-blue-500 text-white'}`}
+                                      onClick={handlePrevPage}
+                                      disabled={currentPage === 1}
+                                  >
+                                    Previous
+                                  </button>
+                                  <span>Page {currentPage}</span>
+                                  <button
+                                      className={`px-3 py-1 ${continuationToken ? 'bg-blue-500 text-white' : 'bg-gray-300'}`}
+                                      onClick={handleNextPage}
+                                      disabled={!continuationToken}
+                                  >
+                                    Next
+                                  </button>
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium">Items per page</label>
+                                  <select
+                                      value={itemsPerPage}
+                                      onChange={(e) => setItemsPerPage(parseInt(e.target.value, 10))}
+                                      className="mt-1 block w-full p-2 border border-gray-300 rounded"
+                                  >
+                                    <option value={5}>5</option>
+                                    <option value={10}>10</option>
+                                    <option value={20}>20</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div className="overflow-auto mt-4">
                                 <table className="min-w-full divide-y divide-gray-200">
                                   <thead className="bg-gray-50">
                                   <tr>
@@ -772,11 +849,11 @@ const App = () => {
                                             category.Identifier
                                         )}
                                       </td>
-                                      <td className="px-6 py-4 whitespace-nowrap">
+                                      <td className="px-6 py-4 whitespace-nowrap flex space-x-2">
                                         {editingCategoryIndex === index ? (
                                             <button
                                                 onClick={() => handleSaveCategory(index)}
-                                                className="bg-green-500 text-white px-3 py-1 rounded mr-2"
+                                                className="text-green-500 hover:text-green-700"
                                             >
                                               Save
                                             </button>
@@ -784,19 +861,32 @@ const App = () => {
                                             <>
                                               <button
                                                   onClick={() => handleEditCategory(index)}
-                                                  className="bg-yellow-500 text-white px-3 py-1 rounded mr-2"
+                                                  className="text-yellow-500 hover:text-yellow-700 flex items-center justify-center"
+                                                  style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    padding: 0,
+                                                    cursor: 'pointer'
+                                                  }}
                                               >
-                                                Edit
+                                                <FontAwesomeIcon icon={faEdit}/>
                                               </button>
                                               <button
                                                   onClick={() => handleDeleteCategory(index)}
-                                                  className="bg-red-500 text-white px-3 py-1 rounded"
+                                                  className="text-red-500 hover:text-red-700 flex items-center justify-center"
+                                                  style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    padding: 0,
+                                                    cursor: 'pointer'
+                                                  }}
                                               >
-                                                Delete
+                                                <FontAwesomeIcon icon={faTrash}/>
                                               </button>
                                             </>
                                         )}
                                       </td>
+
                                     </tr>
                                 ))}
                                 </tbody>
@@ -1053,27 +1143,51 @@ const App = () => {
                                             translation.Value
                                         )}
                                       </td>
-                                      <td className="px-6 py-4 whitespace-nowrap">
+                                      <td className="px-6 py-4 whitespace-nowrap flex items-center space-x-2 justify-center">
                                         {editingRow === index ? (
                                             <button
                                                 onClick={() => handleSaveTranslation(index)}
-                                                className="bg-green-500 text-white px-3 py-1 rounded mr-2"
+                                                className="text-blue-500 hover:text-blue-700 flex items-center justify-center"
+                                                style={{
+                                                  background: 'none',
+                                                  border: 'none',
+                                                  padding: 0,
+                                                  cursor: 'pointer',
+                                                  display: 'flex',
+                                                  alignItems: 'center'
+                                                }}
                                             >
-                                              Save
+                                              <FontAwesomeIcon icon={faCheck}/>
                                             </button>
                                         ) : (
                                             <>
                                               <button
                                                   onClick={() => handleEditTranslation(index)}
-                                                  className="bg-yellow-500 text-white px-3 py-1 rounded mr-2"
+                                                  className="text-yellow-500 hover:text-yellow-700 flex items-center justify-center"
+                                                  style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    padding: 0,
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center'
+                                                  }}
                                               >
-                                                Edit
+                                                <FontAwesomeIcon icon={faEdit}/>
                                               </button>
                                               <button
                                                   onClick={() => handleDeleteTranslation(index)}
-                                                  className="bg-red-500 text-white px-3 py-1 rounded"
+                                                  className="text-red-500 hover:text-red-700 flex items-center justify-center"
+                                                  style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    padding: 0,
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center'
+                                                  }}
                                               >
-                                                Delete
+                                                <FontAwesomeIcon icon={faTrash}/>
                                               </button>
                                             </>
                                         )}
@@ -1100,10 +1214,10 @@ const App = () => {
                         )}
                       </div>
                       <button
-                          className="bg-blue-500 text-white px-4 py-2 rounded mt-4"
+                          className="bg-green-500 text-white px-4 py-2 rounded mt-4"
                           onClick={() => handleSaveMarket(editingMarketIndex)}
                       >
-                        Save
+                      Save
                       </button>
                     </div>
                 )}
