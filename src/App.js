@@ -33,6 +33,7 @@ const App = () => {
   const [editingMarketIndex, setEditingMarketIndex] = useState(null);
   const [newMarketName, setNewMarketName] = useState('');
   const [newMarketIdentifier, setNewMarketIdentifier] = useState('');
+  const [loading, setLoading] = useState(false);
 
   // Memoize Table Clients to prevent unnecessary re-creations
   const categoriesClient = useMemo(
@@ -62,6 +63,7 @@ const App = () => {
   }, [status, startDate, endDate]);
 
   const fetchCategories = async () => {
+    setLoading(true);
     try {
       const entities = categoriesClient.listEntities();
       const categoryList = [];
@@ -76,12 +78,18 @@ const App = () => {
       setCategories(categoryList);
     } catch (error) {
       console.error('Error fetching categories:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const fetchMarkets = async () => {
-    if (!selectedCategory) return;
+    if (!selectedCategory) return; // Ensure a category is selected before fetching markets
+
     try {
+      setLoading(true); // Show loading state
+
+      // Filter markets by the selected category's identifier
       const entities = marketsClient.listEntities({
         queryOptions: { filter: odata`PartitionKey eq '${selectedCategory.Identifier}'` },
       });
@@ -102,10 +110,14 @@ const App = () => {
       setMarkets(marketList);
     } catch (error) {
       console.error('Error fetching markets:', error);
+    } finally {
+      setLoading(false); // Hide loading state
     }
   };
 
+
   const fetchHistory = async (statusFilter, start, end) => {
+    setLoading(true);
     try {
       let filterQuery = odata`Timestamp ge datetime'${start.toISOString()}' and Timestamp le datetime'${end.toISOString()}'`;
       if (statusFilter !== 'All') {
@@ -125,6 +137,8 @@ const App = () => {
       setHistory(historyList);
     } catch (error) {
       console.error('Error fetching history:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -225,31 +239,42 @@ const App = () => {
 
   const createMarketsForNewCategory = async (newCategory) => {
     try {
-      // Fetch all unique markets by RowKey from existing markets
+      // Fetch all unique market identifiers across all categories
       const existingMarkets = await marketsClient.listEntities();
-      const uniqueMarketRowKeys = new Set();
+      const existingMarketIdentifiers = new Set();
 
       for await (const market of existingMarkets) {
-        uniqueMarketRowKeys.add(market.rowKey);
+        existingMarketIdentifiers.add(market.rowKey); // Collect all existing market row keys
       }
 
-      // Create markets for the new category based on unique market row keys
-      const newMarkets = Array.from(uniqueMarketRowKeys).map((rowKey) => ({
-        partitionKey: newCategory.Identifier,
-        rowKey,
-        Name: rowKey.replace(`${newCategory.Identifier}-`, ''), // Use rowKey or modify as per your naming convention
-        Identifier: rowKey,
-        TemplateLayout: '',
-        Styling: '',
-        Translations: JSON.stringify([]),
-        Settings: JSON.stringify({ allowAutoRegeneration: false }),
-      }));
+      // Create new markets for each category based on unique market row keys
+      const categoriesEntities = categoriesClient.listEntities();
+      for await (const category of categoriesEntities) {
+        for (const rowKey of existingMarketIdentifiers) {
+          const newMarket = {
+            partitionKey: category.Identifier, // Set the partition key to the current category's identifier
+            rowKey,
+            Name: rowKey, // Adjust naming logic as necessary
+            Identifier: rowKey,
+            TemplateLayout: '',
+            Styling: '',
+            Translations: JSON.stringify([]),
+            Settings: JSON.stringify({ allowAutoRegeneration: false }),
+          };
 
-      // Insert all new markets into the Markets table
-      for (const market of newMarkets) {
-        await marketsClient.createEntity(market);
+          // Check if this market already exists for this category
+          const existingMarketForCategory = await marketsClient.getEntity(
+              category.Identifier,
+              rowKey
+          ).catch(() => null);
+
+          if (!existingMarketForCategory) {
+            // Only create if not existing to avoid duplicates
+            await marketsClient.createEntity(newMarket);
+          }
+        }
       }
-      console.log(`Created ${newMarkets.length} markets for the new category ${newCategory.Name}`);
+      console.log(`Created markets for all categories including ${newCategory.Name}`);
     } catch (error) {
       console.error('Error creating markets for new category:', error);
     }
@@ -334,6 +359,7 @@ const App = () => {
       return;
     }
 
+    // Ensure that the identifier is unique within the selected category
     const isIdentifierUnique = !markets.some(
         (market) => market.Identifier && market.Identifier.toLowerCase() === newMarketIdentifier.toLowerCase()
     );
@@ -343,37 +369,46 @@ const App = () => {
       return;
     }
 
-    const newMarket = {
-      partitionKey: selectedCategory?.Identifier || 'Default',
-      rowKey: newMarketIdentifier,
-      Name: newMarketName,
-      Identifier: newMarketIdentifier,
-      TemplateLayout: '',
-      Styling: '',
-      Translations: JSON.stringify([]),
-      Settings: JSON.stringify({ allowAutoRegeneration: false }),
-    };
-
     try {
-      await marketsClient.createEntity(newMarket);
-
+      // Loop through each category to create the new market for all categories
       for (const category of categories) {
-        if (category.Identifier !== selectedCategory?.Identifier) {
-          await createMarketsForNewCategory(category);
+        const newMarket = {
+          partitionKey: category.Identifier,  // Set the partition key to each category's identifier
+          rowKey: newMarketIdentifier,
+          Name: newMarketName,
+          Identifier: newMarketIdentifier,
+          TemplateLayout: '',
+          Styling: '',
+          Translations: JSON.stringify([]),
+          Settings: JSON.stringify({ allowAutoRegeneration: false }),
+        };
+
+        // Check if this market already exists for this category
+        const existingMarketForCategory = await marketsClient.getEntity(
+            category.Identifier,
+            newMarketIdentifier
+        ).catch(() => null);
+
+        if (!existingMarketForCategory) {
+          // Only create if it does not exist to avoid duplicates
+          await marketsClient.createEntity(newMarket);
         }
       }
 
-      if (selectedCategory) await fetchMarkets();
+      // Refresh markets list
+      fetchMarkets();
       setNewMarketName('');
       setNewMarketIdentifier('');
       setIdentifierError('');
       setEditingMarketIndex(null);
-      console.log('Market added successfully.');
+      console.log('Market added successfully for all categories.');
+
     } catch (error) {
       console.error('Error adding market:', error);
       setIdentifierError('Failed to add market. Please try again.');
     }
   };
+
 
   const handleAddTranslation = () => {
     setTranslations([...translations, { Key: '', Value: '' }]);
@@ -407,8 +442,9 @@ const App = () => {
     setActiveView('markets');
     setSelectedCategory(category);
     setSelectedMarket(null);
-    fetchMarkets();
+    fetchMarkets(); // Fetch markets for the selected category
   };
+
 
   const handleMarketClick = (market, index) => {
     setSelectedTab(0);
@@ -453,418 +489,428 @@ const App = () => {
             </ul>
           </div>
 
-          {activeView === 'settings' && (
-              <div className="pane" style={{ flex: '1 1 85%' }}>
-                <h2>General Settings</h2>
-                <div className="tabs">
-                  <button onClick={() => setGeneralSettingsTab(0)} className={generalSettingsTab === 0 ? 'active' : ''}>
-                    History
-                  </button>
-                  <button onClick={() => setGeneralSettingsTab(1)} className={generalSettingsTab === 1 ? 'active' : ''}>
-                    Regenerate
-                  </button>
-                  <button onClick={() => setGeneralSettingsTab(4)} className={generalSettingsTab === 4 ? 'active' : ''}>
-                    Categories
-                  </button>
-                  <button onClick={() => setGeneralSettingsTab(5)} className={generalSettingsTab === 5 ? 'active' : ''}>
-                    Markets
-                  </button>
-                </div>
-                <div className="tab-content">
-                  {generalSettingsTab === 0 && (
-                      <div className="history-tab" style={{ marginTop: '20px' }}>
-                        <div className="history-controls" style={{ display: 'flex', alignItems: 'center' }}>
-                          <div className="form-group-inline" style={{ marginRight: '20px' }}>
-                            <label>Status</label>
-                            <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ marginLeft: '10px' }}>
-                              <option value="All">All</option>
-                              <option value="Error">Error</option>
-                              <option value="Warning">Warning</option>
-                              <option value="Information">Information</option>
-                            </select>
-                          </div>
-                          <div
-                              className="form-group-inline"
-                              style={{ marginRight: '20px', display: 'flex', alignItems: 'center' }}
-                          >
-                            <label>Range</label>
-                            <div className="date-range" style={{ marginLeft: '10px' }}>
-                              <DatePicker
-                                  selected={startDate}
-                                  onChange={(date) => setStartDate(date)}
-                                  selectsStart
-                                  startDate={startDate}
-                                  endDate={endDate}
-                                  dateFormat="yyyy-MM-dd"
-                              />
-                              <span style={{ margin: '0 8px' }}>to</span>
-                              <DatePicker
-                                  selected={endDate}
-                                  onChange={(date) => setEndDate(date)}
-                                  selectsEnd
-                                  startDate={startDate}
-                                  endDate={endDate}
-                                  minDate={startDate}
-                                  dateFormat="yyyy-MM-dd"
-                              />
+          {loading ? (
+              <div className="loading">Loading...</div>
+          ) : (
+              <>
+                {activeView === 'settings' && (
+                    <div className="pane" style={{ flex: '1 1 85%' }}>
+                      <h2>General Settings</h2>
+                      <div className="tabs">
+                        <button onClick={() => setGeneralSettingsTab(0)} className={generalSettingsTab === 0 ? 'active' : ''}>
+                          History
+                        </button>
+                        <button onClick={() => setGeneralSettingsTab(1)} className={generalSettingsTab === 1 ? 'active' : ''}>
+                          Regenerate
+                        </button>
+                        <button onClick={() => setGeneralSettingsTab(4)} className={generalSettingsTab === 4 ? 'active' : ''}>
+                          Categories
+                        </button>
+                        <button onClick={() => setGeneralSettingsTab(5)} className={generalSettingsTab === 5 ? 'active' : ''}>
+                          Markets
+                        </button>
+                      </div>
+                      <div className="tab-content">
+                        {generalSettingsTab === 0 && (
+                            <div className="history-tab" style={{ marginTop: '20px' }}>
+                              <div className="history-controls" style={{ display: 'flex', alignItems: 'center' }}>
+                                <div className="form-group-inline" style={{ marginRight: '20px' }}>
+                                  <label>Status</label>
+                                  <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ marginLeft: '10px' }}>
+                                    <option value="All">All</option>
+                                    <option value="Error">Error</option>
+                                    <option value="Warning">Warning</option>
+                                    <option value="Information">Information</option>
+                                  </select>
+                                </div>
+                                <div
+                                    className="form-group-inline"
+                                    style={{ marginRight: '20px', display: 'flex', alignItems: 'center' }}
+                                >
+                                  <label>Range</label>
+                                  <div className="date-range" style={{ marginLeft: '10px' }}>
+                                    <DatePicker
+                                        selected={startDate}
+                                        onChange={(date) => setStartDate(date)}
+                                        selectsStart
+                                        startDate={startDate}
+                                        endDate={endDate}
+                                        dateFormat="yyyy-MM-dd"
+                                    />
+                                    <span style={{ margin: '0 8px' }}>to</span>
+                                    <DatePicker
+                                        selected={endDate}
+                                        onChange={(date) => setEndDate(date)}
+                                        selectsEnd
+                                        startDate={startDate}
+                                        endDate={endDate}
+                                        minDate={startDate}
+                                        dateFormat="yyyy-MM-dd"
+                                    />
+                                  </div>
+                                </div>
+                                <button
+                                    className="clear-button"
+                                    onClick={() => {
+                                      setStatus('All');
+                                      setStartDate(new Date());
+                                      setEndDate(new Date());
+                                    }}
+                                    style={{ marginTop: '10px' }}
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                              <div style={{ marginTop: '20px' }}>
+                                <table className="settings-table">
+                                  <thead>
+                                  <tr>
+                                    <th>Status</th>
+                                    <th>Payload</th>
+                                  </tr>
+                                  </thead>
+                                  <tbody>
+                                  {history.map((item) => (
+                                      <tr key={generateUniqueKey(item.partitionKey, item.rowKey)}>
+                                        <td>{item.Status}</td>
+                                        <td>{item.Payload}</td>
+                                      </tr>
+                                  ))}
+                                  </tbody>
+                                </table>
+                              </div>
                             </div>
-                          </div>
-                          <button
-                              className="clear-button"
-                              onClick={() => {
-                                setStatus('All');
-                                setStartDate(new Date());
-                                setEndDate(new Date());
-                              }}
-                              style={{ marginTop: '10px' }}
-                          >
-                            Clear
-                          </button>
-                        </div>
-                        <div style={{ marginTop: '20px' }}>
-                          <table className="settings-table">
-                            <thead>
-                            <tr>
-                              <th>Status</th>
-                              <th>Payload</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {history.map((item) => (
-                                <tr key={generateUniqueKey(item.partitionKey, item.rowKey)}>
-                                  <td>{item.Status}</td>
-                                  <td>{item.Payload}</td>
+                        )}
+                        {generalSettingsTab === 1 && (
+                            <div style={{ marginTop: '20px' }}>
+                              <button className="save-button small">Start Regeneration</button>
+                            </div>
+                        )}
+                        {generalSettingsTab === 4 && (
+                            <div style={{ marginTop: '20px' }}>
+                              <h3>Categories</h3>
+                              <div style={{ display: 'flex', marginBottom: '10px' }}>
+                                <input
+                                    type="text"
+                                    value={newCategoryName}
+                                    onChange={(e) => setNewCategoryName(e.target.value)}
+                                    placeholder="Category Name"
+                                    className="form-input"
+                                    style={{ marginRight: '10px' }}
+                                />
+                                <input
+                                    type="text"
+                                    value={newCategoryIdentifier}
+                                    onChange={(e) => setNewCategoryIdentifier(e.target.value)}
+                                    placeholder="Identifier"
+                                    className="form-input"
+                                />
+                                <button
+                                    className="add-translation-button"
+                                    onClick={handleAddCategory}
+                                    style={{ backgroundColor: '#555', color: '#fff', marginLeft: '10px' }}
+                                >
+                                  Add Category
+                                </button>
+                              </div>
+                              <table className="translations-table">
+                                <thead>
+                                <tr>
+                                  <th>Name</th>
+                                  <th>Identifier</th>
+                                  <th>Action</th>
                                 </tr>
-                            ))}
-                            </tbody>
-                          </table>
-                        </div>
+                                </thead>
+                                <tbody>
+                                {categories.map((category, index) => (
+                                    <tr key={generateUniqueKey(category.partitionKey, category.rowKey)}>
+                                      <td>
+                                        {editingCategoryIndex === index ? (
+                                            <input
+                                                type="text"
+                                                value={newCategoryName}
+                                                onChange={(e) => setNewCategoryName(e.target.value)}
+                                                className="form-input"
+                                            />
+                                        ) : (
+                                            category.Name
+                                        )}
+                                      </td>
+                                      <td>
+                                        {editingCategoryIndex === index ? (
+                                            <input
+                                                type="text"
+                                                value={newCategoryIdentifier}
+                                                onChange={(e) => setNewCategoryIdentifier(e.target.value)}
+                                                className="form-input"
+                                            />
+                                        ) : (
+                                            category.Identifier
+                                        )}
+                                      </td>
+                                      <td>
+                                        {editingCategoryIndex === index ? (
+                                            <button
+                                                onClick={() => handleSaveCategory(index)}
+                                                className="save-button small"
+                                                style={{ marginRight: '10px' }}
+                                            >
+                                              Save
+                                            </button>
+                                        ) : (
+                                            <>
+                                              <button onClick={() => handleEditCategory(index)} className="edit-button">
+                                                Edit
+                                              </button>
+                                              <button onClick={() => handleDeleteCategory(index)} className="delete-button">
+                                                Delete
+                                              </button>
+                                            </>
+                                        )}
+                                      </td>
+                                    </tr>
+                                ))}
+                                </tbody>
+                              </table>
+                            </div>
+                        )}
+                        {generalSettingsTab === 5 && (
+                            <div style={{ marginTop: '20px' }}>
+                              <h3>Markets</h3>
+                              <div style={{ display: 'flex', marginBottom: '10px' }}>
+                                <input
+                                    type="text"
+                                    value={newMarketName}
+                                    onChange={(e) => setNewMarketName(e.target.value)}
+                                    placeholder="Market Name"
+                                    className="form-input"
+                                    style={{ marginRight: '10px' }}
+                                />
+                                <input
+                                    type="text"
+                                    value={newMarketIdentifier}
+                                    onChange={(e) => setNewMarketIdentifier(e.target.value)}
+                                    placeholder="Identifier"
+                                    className="form-input"
+                                />
+                                <button
+                                    className="add-translation-button"
+                                    onClick={handleAddMarket}
+                                    style={{ backgroundColor: '#555', color: '#fff', marginLeft: '10px' }}
+                                >
+                                  Add Market
+                                </button>
+                              </div>
+                              <table className="translations-table">
+                                <thead>
+                                <tr>
+                                  <th>Name</th>
+                                  <th>Identifier</th>
+                                  <th>Action</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {markets.map((market, index) => (
+                                    <tr key={generateUniqueKey(market.partitionKey, market.rowKey)}>
+                                      <td>
+                                        {editingMarketIndex === index ? (
+                                            <input
+                                                type="text"
+                                                value={newMarketName}
+                                                onChange={(e) => setNewMarketName(e.target.value)}
+                                                className="form-input"
+                                            />
+                                        ) : (
+                                            market.Name
+                                        )}
+                                      </td>
+                                      <td>
+                                        {editingMarketIndex === index ? (
+                                            <input
+                                                type="text"
+                                                value={newMarketIdentifier}
+                                                onChange={(e) => setNewMarketIdentifier(e.target.value)}
+                                                className="form-input"
+                                            />
+                                        ) : (
+                                            market.Identifier
+                                        )}
+                                      </td>
+                                      <td>
+                                        {editingMarketIndex === index ? (
+                                            <button
+                                                onClick={() => handleSaveMarket(index)}
+                                                className="save-button small"
+                                                style={{ marginRight: '10px' }}
+                                            >
+                                              Save
+                                            </button>
+                                        ) : (
+                                            <>
+                                              <button onClick={() => handleEditMarket(index)} className="edit-button">
+                                                Edit
+                                              </button>
+                                              <button onClick={() => handleDeleteMarket(index)} className="delete-button">
+                                                Delete
+                                              </button>
+                                            </>
+                                        )}
+                                      </td>
+                                    </tr>
+                                ))}
+                                </tbody>
+                              </table>
+                            </div>
+                        )}
                       </div>
-                  )}
-                  {generalSettingsTab === 1 && (
-                      <div style={{ marginTop: '20px' }}>
-                        <button className="save-button small">Start Regeneration</button>
-                      </div>
-                  )}
-                  {generalSettingsTab === 4 && (
-                      <div style={{ marginTop: '20px' }}>
-                        <h3>Categories</h3>
-                        <div style={{ display: 'flex', marginBottom: '10px' }}>
-                          <input
-                              type="text"
-                              value={newCategoryName}
-                              onChange={(e) => setNewCategoryName(e.target.value)}
-                              placeholder="Category Name"
-                              className="form-input"
-                              style={{ marginRight: '10px' }}
-                          />
-                          <input
-                              type="text"
-                              value={newCategoryIdentifier}
-                              onChange={(e) => setNewCategoryIdentifier(e.target.value)}
-                              placeholder="Identifier"
-                              className="form-input"
-                          />
-                          <button
-                              className="add-translation-button"
-                              onClick={handleAddCategory}
-                              style={{ backgroundColor: '#555', color: '#fff', marginLeft: '10px' }}
-                          >
-                            Add Category
-                          </button>
-                        </div>
-                        <table className="translations-table">
-                          <thead>
-                          <tr>
-                            <th>Name</th>
-                            <th>Identifier</th>
-                            <th>Action</th>
-                          </tr>
-                          </thead>
-                          <tbody>
-                          {categories.map((category, index) => (
-                              <tr key={generateUniqueKey(category.partitionKey, category.rowKey)}>
-                                <td>
-                                  {editingCategoryIndex === index ? (
-                                      <input
-                                          type="text"
-                                          value={newCategoryName}
-                                          onChange={(e) => setNewCategoryName(e.target.value)}
-                                          className="form-input"
-                                      />
-                                  ) : (
-                                      category.Name
-                                  )}
-                                </td>
-                                <td>
-                                  {editingCategoryIndex === index ? (
-                                      <input
-                                          type="text"
-                                          value={newCategoryIdentifier}
-                                          onChange={(e) => setNewCategoryIdentifier(e.target.value)}
-                                          className="form-input"
-                                      />
-                                  ) : (
-                                      category.Identifier
-                                  )}
-                                </td>
-                                <td>
-                                  {editingCategoryIndex === index ? (
-                                      <button
-                                          onClick={() => handleSaveCategory(index)}
-                                          className="save-button small"
-                                          style={{ marginRight: '10px' }}
-                                      >
-                                        Save
-                                      </button>
-                                  ) : (
-                                      <>
-                                        <button onClick={() => handleEditCategory(index)} className="edit-button">
-                                          Edit
-                                        </button>
-                                        <button onClick={() => handleDeleteCategory(index)} className="delete-button">
-                                          Delete
-                                        </button>
-                                      </>
-                                  )}
-                                </td>
-                              </tr>
-                          ))}
-                          </tbody>
-                        </table>
-                      </div>
-                  )}
-                  {generalSettingsTab === 5 && (
-                      <div style={{ marginTop: '20px' }}>
-                        <h3>Markets</h3>
-                        <div style={{ display: 'flex', marginBottom: '10px' }}>
-                          <input
-                              type="text"
-                              value={newMarketName}
-                              onChange={(e) => setNewMarketName(e.target.value)}
-                              placeholder="Market Name"
-                              className="form-input"
-                              style={{ marginRight: '10px' }}
-                          />
-                          <input
-                              type="text"
-                              value={newMarketIdentifier}
-                              onChange={(e) => setNewMarketIdentifier(e.target.value)}
-                              placeholder="Identifier"
-                              className="form-input"
-                          />
-                          <button
-                              className="add-translation-button"
-                              onClick={handleAddMarket}
-                              style={{ backgroundColor: '#555', color: '#fff', marginLeft: '10px' }}
-                          >
-                            Add Market
-                          </button>
-                        </div>
-                        <table className="translations-table">
-                          <thead>
-                          <tr>
-                            <th>Name</th>
-                            <th>Identifier</th>
-                            <th>Action</th>
-                          </tr>
-                          </thead>
-                          <tbody>
-                          {markets.map((market, index) => (
-                              <tr key={generateUniqueKey(market.partitionKey, market.rowKey)}>
-                                <td>
-                                  {editingMarketIndex === index ? (
-                                      <input
-                                          type="text"
-                                          value={newMarketName}
-                                          onChange={(e) => setNewMarketName(e.target.value)}
-                                          className="form-input"
-                                      />
-                                  ) : (
-                                      market.Name
-                                  )}
-                                </td>
-                                <td>
-                                  {editingMarketIndex === index ? (
-                                      <input
-                                          type="text"
-                                          value={newMarketIdentifier}
-                                          onChange={(e) => setNewMarketIdentifier(e.target.value)}
-                                          className="form-input"
-                                      />
-                                  ) : (
-                                      market.Identifier
-                                  )}
-                                </td>
-                                <td>
-                                  {editingMarketIndex === index ? (
-                                      <button
-                                          onClick={() => handleSaveMarket(index)}
-                                          className="save-button small"
-                                          style={{ marginRight: '10px' }}
-                                      >
-                                        Save
-                                      </button>
-                                  ) : (
-                                      <>
-                                        <button onClick={() => handleEditMarket(index)} className="edit-button">
-                                          Edit
-                                        </button>
-                                        <button onClick={() => handleDeleteMarket(index)} className="delete-button">
-                                          Delete
-                                        </button>
-                                      </>
-                                  )}
-                                </td>
-                              </tr>
-                          ))}
-                          </tbody>
-                        </table>
-                      </div>
-                  )}
-                </div>
-              </div>
-          )}
+                    </div>
+                )}
 
-          {(activeView === 'markets' || activeView === 'details') && (
-              <div className="pane" style={{ flex: '0 0 15%' }}>
-                <h2>Markets</h2>
-                <ul>
-                  {markets.map((market, index) => (
-                      <li
-                          key={generateUniqueKey(market.partitionKey, market.rowKey)}
-                          onClick={() => handleMarketClick(market, index)}
-                          className={selectedMarket?.rowKey === market.rowKey ? 'selected' : ''}
+                {(activeView === 'markets' || activeView === 'details') && (
+                    <div className="pane" style={{ flex: '0 0 15%' }}>
+                      <h2>Markets</h2>
+                      <ul>
+                        {markets.map((market, index) => (
+                            <li
+                                key={generateUniqueKey(market.partitionKey, market.rowKey)}
+                                onClick={() => handleMarketClick(market, index)}
+                                className={selectedMarket?.rowKey === market.rowKey ? 'selected' : ''}
+                            >
+                              {market.Name}
+                            </li>
+                        ))}
+                      </ul>
+                    </div>
+                )}
+
+                {activeView === 'details' && selectedMarket && (
+                    <div className="pane" style={{ flex: '1 1 70%' }}>
+                      <h2>Details</h2>
+                      <div className="tabs">
+                        <button onClick={() => setSelectedTab(0)} className={selectedTab === 0 ? 'active' : ''}>
+                          Template Layout
+                        </button>
+                        <button onClick={() => setSelectedTab(1)} className={selectedTab === 1 ? 'active' : ''}>
+                          Styling
+                        </button>
+                        <button onClick={() => setSelectedTab(2)} className={selectedTab === 2 ? 'active' : ''}>
+                          Translations
+                        </button>
+                        <button onClick={() => setSelectedTab(3)} className={selectedTab === 3 ? 'active' : ''}>
+                          Settings
+                        </button>
+                        <div className="tab-content">
+                          {selectedTab === 0 && (
+                              <div style={{ marginTop: '20px' }}>
+                        <textarea
+                            value={templateLayoutText}
+                            onChange={(e) => setTemplateLayoutText(e.target.value)}
+                            className="large-textarea"
+                            placeholder="Edit Template Layout here..."
+                        />
+                              </div>
+                          )}
+                          {selectedTab === 1 && (
+                              <div style={{ marginTop: '20px' }}>
+                        <textarea
+                            value={templateStylingText}
+                            onChange={(e) => setTemplateStylingText(e.target.value)}
+                            className="large-textarea"
+                            placeholder="Edit Styling here..."
+                        />
+                              </div>
+                          )}
+                          {selectedTab === 2 && (
+                              <div style={{ marginTop: '20px' }}>
+                                <button
+                                    className="add-translation-button"
+                                    onClick={handleAddTranslation}
+                                    style={{ backgroundColor: '#555', color: '#fff', marginBottom: '10px' }}
+                                >
+                                  + Add Translation
+                                </button>
+                                <table className="translations-table">
+                                  <thead>
+                                  <tr>
+                                    <th>Key</th>
+                                    <th>Translation</th>
+                                    <th>Action</th>
+                                  </tr>
+                                  </thead>
+                                  <tbody>
+                                  {translations.map((translation, index) => (
+                                      <tr key={`${translation.Key}-${index}`}>
+                                        <td>
+                                          {editingRow === index ? (
+                                              <input
+                                                  type="text"
+                                                  value={newTranslationKey}
+                                                  onChange={(e) => setNewTranslationKey(e.target.value)}
+                                                  className="form-input"
+                                              />
+                                          ) : (
+                                              translation.Key
+                                          )}
+                                        </td>
+                                        <td>
+                                          {editingRow === index ? (
+                                              <input
+                                                  type="text"
+                                                  value={newTranslationValue}
+                                                  onChange={(e) => setNewTranslationValue(e.target.value)}
+                                                  className="form-input"
+                                              />
+                                          ) : (
+                                              translation.Value
+                                          )}
+                                        </td>
+                                        <td>
+                                          {editingRow === index ? (
+                                              <button
+                                                  onClick={() => handleSaveTranslation(index)}
+                                                  className="save-button small"
+                                                  style={{ marginRight: '10px' }}
+                                              >
+                                                Save
+                                              </button>
+                                          ) : (
+                                              <>
+                                                <button onClick={() => handleEditTranslation(index)} className="edit-button">
+                                                  Edit
+                                                </button>
+                                                <button onClick={() => handleDeleteTranslation(index)} className="delete-button">
+                                                  Delete
+                                                </button>
+                                              </>
+                                          )}
+                                        </td>
+                                      </tr>
+                                  ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                          )}
+                          {selectedTab === 3 && (
+                              <div style={{ marginTop: '20px' }}>
+                                <label className="switch" style={{ marginRight: '10px' }}>
+                                  <input type="checkbox" checked={autoRegenerate} onChange={handleToggleSwitch} />
+                                  <span className="slider"></span>
+                                </label>
+                                <span>Allow automatic regeneration</span>
+                              </div>
+                          )}
+                        </div>
+                      </div>
+                      <button
+                          className="save-button"
+                          onClick={() => handleSaveMarket(editingMarketIndex)}
+                          style={{ marginTop: '20px' }}
                       >
-                        {market.Name}
-                      </li>
-                  ))}
-                </ul>
-              </div>
-          )}
-
-          {activeView === 'details' && selectedMarket && (
-              <div className="pane" style={{ flex: '1 1 70%' }}>
-                <h2>Details</h2>
-                <div className="tabs">
-                  <button onClick={() => setSelectedTab(0)} className={selectedTab === 0 ? 'active' : ''}>
-                    Template Layout
-                  </button>
-                  <button onClick={() => setSelectedTab(1)} className={selectedTab === 1 ? 'active' : ''}>
-                    Styling
-                  </button>
-                  <button onClick={() => setSelectedTab(2)} className={selectedTab === 2 ? 'active' : ''}>
-                    Translations
-                  </button>
-                  <button onClick={() => setSelectedTab(3)} className={selectedTab === 3 ? 'active' : ''}>
-                    Settings
-                  </button>
-                  <div className="tab-content">
-                    {selectedTab === 0 && (
-                        <div style={{ marginTop: '20px' }}>
-                    <textarea
-                        value={templateLayoutText}
-                        onChange={(e) => setTemplateLayoutText(e.target.value)}
-                        className="large-textarea"
-                        placeholder="Edit Template Layout here..."
-                    />
-                        </div>
-                    )}
-                    {selectedTab === 1 && (
-                        <div style={{ marginTop: '20px' }}>
-                    <textarea
-                        value={templateStylingText}
-                        onChange={(e) => setTemplateStylingText(e.target.value)}
-                        className="large-textarea"
-                        placeholder="Edit Styling here..."
-                    />
-                        </div>
-                    )}
-                    {selectedTab === 2 && (
-                        <div style={{ marginTop: '20px' }}>
-                          <button
-                              className="add-translation-button"
-                              onClick={handleAddTranslation}
-                              style={{ backgroundColor: '#555', color: '#fff', marginBottom: '10px' }}
-                          >
-                            + Add Translation
-                          </button>
-                          <table className="translations-table">
-                            <thead>
-                            <tr>
-                              <th>Key</th>
-                              <th>Translation</th>
-                              <th>Action</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            {translations.map((translation, index) => (
-                                <tr key={`${translation.Key}-${index}`}>
-                                  <td>
-                                    {editingRow === index ? (
-                                        <input
-                                            type="text"
-                                            value={newTranslationKey}
-                                            onChange={(e) => setNewTranslationKey(e.target.value)}
-                                            className="form-input"
-                                        />
-                                    ) : (
-                                        translation.Key
-                                    )}
-                                  </td>
-                                  <td>
-                                    {editingRow === index ? (
-                                        <input
-                                            type="text"
-                                            value={newTranslationValue}
-                                            onChange={(e) => setNewTranslationValue(e.target.value)}
-                                            className="form-input"
-                                        />
-                                    ) : (
-                                        translation.Value
-                                    )}
-                                  </td>
-                                  <td>
-                                    {editingRow === index ? (
-                                        <button
-                                            onClick={() => handleSaveTranslation(index)}
-                                            className="save-button small"
-                                            style={{ marginRight: '10px' }}
-                                        >
-                                          Save
-                                        </button>
-                                    ) : (
-                                        <>
-                                          <button onClick={() => handleEditTranslation(index)} className="edit-button">
-                                            Edit
-                                          </button>
-                                          <button onClick={() => handleDeleteTranslation(index)} className="delete-button">
-                                            Delete
-                                          </button>
-                                        </>
-                                    )}
-                                  </td>
-                                </tr>
-                            ))}
-                            </tbody>
-                          </table>
-                        </div>
-                    )}
-                    {selectedTab === 3 && (
-                        <div style={{ marginTop: '20px' }}>
-                          <label className="switch" style={{ marginRight: '10px' }}>
-                            <input type="checkbox" checked={autoRegenerate} onChange={handleToggleSwitch} />
-                            <span className="slider"></span>
-                          </label>
-                          <span>Allow automatic regeneration</span>
-                        </div>
-                    )}
-                  </div>
-                </div>
-                <button className="save-button" onClick={() => handleSaveMarket(editingMarketIndex)} style={{ marginTop: '20px' }}>
-                  Save
-                </button>
-              </div>
+                        Save
+                      </button>
+                    </div>
+                )}
+              </>
           )}
         </div>
       </div>
