@@ -11,8 +11,6 @@ const App = () => {
   const [categories, setCategories] = useState([]);
   const [markets, setMarkets] = useState([]);
   const [history, setHistory] = useState([]);
-  const [secondPaneItems, setSecondPaneItems] = useState([]);
-  const [thirdPaneData, setThirdPaneData] = useState(null);
   const [activeView, setActiveView] = useState('none');
   const [selectedTab, setSelectedTab] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -97,8 +95,8 @@ const App = () => {
           Identifier: entity.Identifier,
           TemplateLayout: entity.TemplateLayout || '',
           Styling: entity.Styling || '',
-          Translations: JSON.parse(entity.Translations || '[]'), // Deserialize from JSON
-          Settings: JSON.parse(entity.Settings || '{}'), // Deserialize from JSON
+          Translations: JSON.parse(entity.Translations || '[]'),
+          Settings: JSON.parse(entity.Settings || '{}'),
         });
       }
       setMarkets(marketList);
@@ -168,8 +166,24 @@ const App = () => {
     try {
       await categoriesClient.deleteEntity('Categories', category.rowKey);
       console.log('Category deleted successfully.');
+      await deleteMarketsByCategory(category.Identifier);
     } catch (error) {
       console.error('Error deleting category:', error);
+    }
+  };
+
+  const deleteMarketsByCategory = async (categoryIdentifier) => {
+    try {
+      const entities = marketsClient.listEntities({
+        queryOptions: { filter: odata`PartitionKey eq '${categoryIdentifier}'` },
+      });
+
+      for await (const entity of entities) {
+        await marketsClient.deleteEntity(entity.partitionKey, entity.rowKey);
+      }
+      console.log(`All markets deleted for category ${categoryIdentifier}`);
+    } catch (error) {
+      console.error(`Error deleting markets for category ${categoryIdentifier}:`, error);
     }
   };
 
@@ -202,27 +216,57 @@ const App = () => {
       setNewCategoryIdentifier('');
       setIdentifierError('');
       setEditingCategoryIndex(null);
+      await createMarketsForNewCategory(newCategory); // Automatically create markets for the new category
     } catch (error) {
       console.error('Error adding category:', error);
       setIdentifierError('Failed to add category. Please try again.');
     }
   };
 
+  const createMarketsForNewCategory = async (newCategory) => {
+    try {
+      // Fetch all unique markets by RowKey from existing markets
+      const existingMarkets = await marketsClient.listEntities();
+      const uniqueMarketRowKeys = new Set();
+
+      for await (const market of existingMarkets) {
+        uniqueMarketRowKeys.add(market.rowKey);
+      }
+
+      // Create markets for the new category based on unique market row keys
+      const newMarkets = Array.from(uniqueMarketRowKeys).map((rowKey) => ({
+        partitionKey: newCategory.Identifier,
+        rowKey,
+        Name: rowKey.replace(`${newCategory.Identifier}-`, ''), // Use rowKey or modify as per your naming convention
+        Identifier: rowKey,
+        TemplateLayout: '',
+        Styling: '',
+        Translations: JSON.stringify([]),
+        Settings: JSON.stringify({ allowAutoRegeneration: false }),
+      }));
+
+      // Insert all new markets into the Markets table
+      for (const market of newMarkets) {
+        await marketsClient.createEntity(market);
+      }
+      console.log(`Created ${newMarkets.length} markets for the new category ${newCategory.Name}`);
+    } catch (error) {
+      console.error('Error creating markets for new category:', error);
+    }
+  };
+
   const handleSaveMarket = async (index) => {
-    // Validate that the index is within the correct range
     if (index === null || index < 0 || index >= markets.length) {
       console.error('Invalid market index:', index);
-      return; // Exit early if the index is invalid
+      return;
     }
 
-    // Access the market safely
     const market = markets[index];
     if (!market) {
       console.error('Market not found at index:', index);
-      return; // Exit early if the market is not found
+      return;
     }
 
-    // Prepare the market object for update
     const updatedMarket = {
       partitionKey: selectedCategory?.Identifier || 'Default',
       rowKey: market.rowKey,
@@ -234,20 +278,16 @@ const App = () => {
       Settings: JSON.stringify({ allowAutoRegeneration: autoRegenerate }),
     };
 
-    console.log('Updating market:', updatedMarket);
-
     try {
-      // Use 'Merge' to update the market entity without replacing it entirely
       await marketsClient.updateEntity(updatedMarket, 'Replace');
       console.log('Market updated successfully.');
 
-      // Update the state with the new market details
       setMarkets((prevMarkets) => {
         const updatedMarkets = [...prevMarkets];
-        updatedMarkets[index] = { ...market, ...updatedMarket }; // Merge updated details into the state
+        updatedMarkets[index] = { ...market, ...updatedMarket };
+        setSelectedMarket(updatedMarkets[index]);
         return updatedMarkets;
       });
-      setEditingMarketIndex(null);
     } catch (error) {
       console.error('Error updating market:', error.message);
       alert(`Failed to update market: ${error.message}`);
@@ -257,16 +297,17 @@ const App = () => {
   const handleEditMarket = (index) => {
     if (index === null || index < 0 || index >= markets.length) {
       console.error('Invalid market index:', index);
-      return; // Prevent setting an invalid index
+      return;
     }
 
     setEditingMarketIndex(index);
-    setNewMarketName(markets[index].Name);
-    setNewMarketIdentifier(markets[index].Identifier);
-    setTemplateLayoutText(markets[index].TemplateLayout || '');
-    setTemplateStylingText(markets[index].Styling || '');
-    setTranslations(markets[index].Translations || []);
-    setAutoRegenerate(markets[index].Settings?.allowAutoRegeneration || false);
+    const market = markets[index];
+    setNewMarketName(market.Name);
+    setNewMarketIdentifier(market.Identifier);
+    setTemplateLayoutText(market.TemplateLayout || '');
+    setTemplateStylingText(market.Styling || '');
+    setTranslations(market.Translations || []);
+    setAutoRegenerate(market.Settings?.allowAutoRegeneration || false);
   };
 
   const handleDeleteMarket = async (index) => {
@@ -302,18 +343,26 @@ const App = () => {
       return;
     }
 
+    const newMarket = {
+      partitionKey: selectedCategory?.Identifier || 'Default',
+      rowKey: newMarketIdentifier,
+      Name: newMarketName,
+      Identifier: newMarketIdentifier,
+      TemplateLayout: '',
+      Styling: '',
+      Translations: JSON.stringify([]),
+      Settings: JSON.stringify({ allowAutoRegeneration: false }),
+    };
+
     try {
-      const newMarket = {
-        partitionKey: selectedCategory?.Identifier || 'Default',
-        rowKey: newMarketIdentifier,
-        Name: newMarketName,
-        Identifier: newMarketIdentifier,
-        TemplateLayout: '',
-        Styling: '',
-        Translations: JSON.stringify([]),
-        Settings: JSON.stringify({ allowAutoRegeneration: false }),
-      };
       await marketsClient.createEntity(newMarket);
+
+      for (const category of categories) {
+        if (category.Identifier !== selectedCategory?.Identifier) {
+          await createMarketsForNewCategory(category);
+        }
+      }
+
       if (selectedCategory) await fetchMarkets();
       setNewMarketName('');
       setNewMarketIdentifier('');
@@ -355,34 +404,25 @@ const App = () => {
   };
 
   const handleCategoryClick = (category) => {
-    setSecondPaneItems(markets);
-    setThirdPaneData(null);
     setActiveView('markets');
     setSelectedCategory(category);
     setSelectedMarket(null);
     fetchMarkets();
   };
 
-  const handleMarketClick = (market) => {
-    const marketData = {
-      TemplateLayout: { Code: market.TemplateLayout || '' },
-      TemplateStyling: { Code: market.Styling || '' },
-      Translations: market.Translations || [],
-      Settings: market.Settings || { allowAutoRegeneration: false },
-    };
-
-    setThirdPaneData(marketData);
-    setTemplateLayoutText(marketData.TemplateLayout.Code);
-    setTemplateStylingText(marketData.TemplateStyling.Code);
-    setAutoRegenerate(marketData.Settings.allowAutoRegeneration);
+  const handleMarketClick = (market, index) => {
     setSelectedTab(0);
     setActiveView('details');
     setSelectedMarket(market);
+    setTemplateLayoutText(market.TemplateLayout || '');
+    setTemplateStylingText(market.Styling || '');
+    setTranslations(market.Translations || []); // Show translations specific to the selected market
+    setAutoRegenerate(market.Settings?.allowAutoRegeneration || false);
+    setEditingMarketIndex(index);
   };
 
   const handleGeneralSettingsClick = () => {
     setActiveView('settings');
-    setThirdPaneData(null);
     setGeneralSettingsTab(0);
   };
 
@@ -693,10 +733,7 @@ const App = () => {
                   {markets.map((market, index) => (
                       <li
                           key={generateUniqueKey(market.partitionKey, market.rowKey)}
-                          onClick={() => {
-                            handleMarketClick(market);
-                            setEditingMarketIndex(index); // Set the correct index for editing
-                          }}
+                          onClick={() => handleMarketClick(market, index)}
                           className={selectedMarket?.rowKey === market.rowKey ? 'selected' : ''}
                       >
                         {market.Name}
@@ -706,7 +743,7 @@ const App = () => {
               </div>
           )}
 
-          {activeView === 'details' && thirdPaneData && (
+          {activeView === 'details' && selectedMarket && (
               <div className="pane" style={{ flex: '1 1 70%' }}>
                 <h2>Details</h2>
                 <div className="tabs">
