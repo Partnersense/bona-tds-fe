@@ -13,7 +13,7 @@ import {
   faPalette,
   faLanguage,
   faCogs,
-  faTrash, faSave, faCheck
+  faTrash, faSave, faCheck, faPlay
 } from '@fortawesome/free-solid-svg-icons';
 
 const accountUrl = 'https://tdsassets.table.core.windows.net';
@@ -771,6 +771,7 @@ const App = () => {
                             <div className="mt-4">
                               <button className="bg-blue-500 text-white px-4 py-2 rounded"
                                       onClick={handleStartRegeneration}>
+                                <FontAwesomeIcon icon={faPlay} className="mr-2" />
                                 Start Regeneration
                               </button>
                             </div>
@@ -1112,17 +1113,16 @@ const App = () => {
                                   </th>
                                 </tr>
                                 </thead>
+
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                {translations.map((translation, index) => (
+                                {Array.isArray(translations) && translations.map((translation, index) => (
                                     <tr key={`${translation.Key}-${index}`}>
                                       <td className="px-6 py-4 whitespace-nowrap">
                                         {editingRow === index ? (
                                             <input
                                                 type="text"
                                                 value={newTranslationKey}
-                                                onChange={(e) =>
-                                                    setNewTranslationKey(e.target.value)
-                                                }
+                                                onChange={(e) => setNewTranslationKey(e.target.value)}
                                                 className="border border-gray-300 rounded p-2"
                                             />
                                         ) : (
@@ -1134,9 +1134,7 @@ const App = () => {
                                             <input
                                                 type="text"
                                                 value={newTranslationValue}
-                                                onChange={(e) =>
-                                                    setNewTranslationValue(e.target.value)
-                                                }
+                                                onChange={(e) => setNewTranslationValue(e.target.value)}
                                                 className="border border-gray-300 rounded p-2"
                                             />
                                         ) : (
@@ -1195,6 +1193,7 @@ const App = () => {
                                     </tr>
                                 ))}
                                 </tbody>
+
                               </table>
                             </div>
                         )}
@@ -1217,7 +1216,7 @@ const App = () => {
                           className="bg-blue-500 text-white px-4 py-2 rounded mt-4"
                           onClick={() => handleSaveMarket(editingMarketIndex)}
                       >
-                      Save
+                        Save
                       </button>
                     </div>
                 )}
