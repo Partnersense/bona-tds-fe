@@ -3,6 +3,17 @@ import './App.css';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { TableClient, AzureSASCredential, odata } from '@azure/data-tables';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faHistory,
+  faSyncAlt,
+  faThList,
+  faStore,
+  faEdit,
+  faPalette,
+  faLanguage,
+  faCogs,
+} from '@fortawesome/free-solid-svg-icons';
 
 const accountUrl = 'https://tdsassets.table.core.windows.net';
 const sasToken = 'sv=2022-11-02&ss=bfqt&srt=sco&sp=rwdlacupiytfx&se=2025-03-27T21:27:47Z&st=2024-09-06T12:27:47Z&spr=https,http&sig=W0cnadfFt2Whoed84YE%2F28NLvkolJlMl%2BRFFPKKwxG4%3D';
@@ -36,7 +47,6 @@ const App = () => {
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState({ message: '', type: '' });
 
-
   const showNotification = (message, type = 'success') => {
     setNotification({ message, type });
     setTimeout(() => {
@@ -68,6 +78,29 @@ const App = () => {
   useEffect(() => {
     fetchHistory(status, startDate, endDate);
   }, [status, startDate, endDate]);
+
+
+  const handleStartRegeneration = async () => {
+    try {
+      const newHistoryRecord = {
+        partitionKey: 'History',
+        rowKey: `${Date.now()}`, // Use current timestamp as a unique row key
+        Status: 'Started',
+        Payload: 'Regeneration process started',
+        Timestamp: new Date().toISOString(), // Add current DateTime
+      };
+
+      await historyClient.createEntity(newHistoryRecord);
+      setHistory([...history, newHistoryRecord]); // Update state with new record
+      showNotification('Regeneration started and recorded in history.', 'success');
+    } catch (error) {
+      console.error('Error saving history record:', error);
+      showNotification('Failed to save history record. Please try again.', 'error');
+    }
+  };
+
+
+
 
   const fetchCategories = async () => {
     setLoading(true);
@@ -164,10 +197,10 @@ const App = () => {
 
     try {
       await categoriesClient.upsertEntity(category, 'Replace');
-      showNotification('Category saved successfully!', 'success'); // Show success message
+      showNotification('Category saved successfully!', 'success');
       console.log('Category replaced successfully.');
     } catch (error) {
-      showNotification('Failed to save category. Please try again.', 'error'); // Show error message
+      showNotification('Failed to save category. Please try again.', 'error');
       console.error('Error replacing category:', error);
     }
   };
@@ -214,7 +247,9 @@ const App = () => {
     }
 
     const isIdentifierUnique = !categories.some(
-        (category) => category.Identifier && category.Identifier.toLowerCase() === newCategoryIdentifier.toLowerCase()
+        (category) =>
+            category.Identifier &&
+            category.Identifier.toLowerCase() === newCategoryIdentifier.toLowerCase()
     );
 
     if (!isIdentifierUnique) {
@@ -266,10 +301,9 @@ const App = () => {
             Settings: JSON.stringify({ allowAutoRegeneration: false }),
           };
 
-          const existingMarketForCategory = await marketsClient.getEntity(
-              category.Identifier,
-              rowKey
-          ).catch(() => null);
+          const existingMarketForCategory = await marketsClient
+              .getEntity(category.Identifier, rowKey)
+              .catch(() => null);
 
           if (!existingMarketForCategory) {
             await marketsClient.createEntity(newMarket);
@@ -369,7 +403,9 @@ const App = () => {
     }
 
     const isIdentifierUnique = !markets.some(
-        (market) => market.Identifier && market.Identifier.toLowerCase() === newMarketIdentifier.toLowerCase()
+        (market) =>
+            market.Identifier &&
+            market.Identifier.toLowerCase() === newMarketIdentifier.toLowerCase()
     );
 
     if (!isIdentifierUnique) {
@@ -390,10 +426,9 @@ const App = () => {
           Settings: JSON.stringify({ allowAutoRegeneration: false }),
         };
 
-        const existingMarketForCategory = await marketsClient.getEntity(
-            category.Identifier,
-            newMarketIdentifier
-        ).catch(() => null);
+        const existingMarketForCategory = await marketsClient
+            .getEntity(category.Identifier, newMarketIdentifier)
+            .catch(() => null);
 
         if (!existingMarketForCategory) {
           await marketsClient.createEntity(newMarket);
@@ -470,14 +505,16 @@ const App = () => {
           {notification.message && (
               <div
                   className={`fixed top-4 right-4 p-4 rounded shadow-lg ${
-                      notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+                      notification.type === 'success'
+                          ? 'bg-green-500 text-white'
+                          : 'bg-red-500 text-white'
                   }`}
               >
                 {notification.message}
               </div>
           )}
           {/* Sidebar - Categories */}
-          <div className="bg-white shadow-md rounded-lg p-4 col-span-2">
+          <div className="bg-white shadow-md rounded-lg p-4 col-span-2 min-height-800">
             <h2 className="text-lg font-semibold mb-4">Categories</h2>
             <ul className="space-y-2">
               {categories.map((category) => (
@@ -485,18 +522,22 @@ const App = () => {
                       key={generateUniqueKey(category.partitionKey, category.rowKey)}
                       onClick={() => handleCategoryClick(category)}
                       className={`cursor-pointer p-2 rounded ${
-                          selectedCategory?.rowKey === category.rowKey ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'
+                          selectedCategory?.rowKey === category.rowKey
+                              ? 'bg-blue-500 text-white'
+                              : 'hover:bg-gray-100'
                       }`}
                   >
                     {category.Name}
                   </li>
               ))}
             </ul>
-            <hr className="my-4"/>
+            <hr className="my-4" />
             <ul className="space-y-2">
               <li
                   className={`cursor-pointer p-2 rounded flex items-center ${
-                      activeView === 'settings' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'
+                      activeView === 'settings'
+                          ? 'bg-blue-500 text-white'
+                          : 'hover:bg-gray-100'
                   }`}
                   onClick={handleGeneralSettingsClick}
               >
@@ -507,46 +548,58 @@ const App = () => {
 
           {/* Main Content */}
           {loading ? (
-              <div className="col-span-3 flex justify-center items-center">
+              <div className="col-span-3 flex justify-center items-center min-height-800">
                 <div className="text-blue-500">Loading...</div>
               </div>
           ) : (
               <>
                 {activeView === 'settings' && (
-                    <div className="bg-white shadow-md rounded-lg p-4 col-span-8">
+                    <div className="bg-white shadow-md rounded-lg p-4 col-span-8 min-height-800">
                       {/* General Settings View */}
                       <h2 className="text-lg font-semibold mb-4">General Settings</h2>
                       <div className="flex space-x-4 mb-4">
                         <button
                             onClick={() => setGeneralSettingsTab(0)}
                             className={`px-4 py-2 rounded ${
-                                generalSettingsTab === 0 ? 'bg-blue-500 text-white' : 'bg-gray-200'
+                                generalSettingsTab === 0
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-gray-200'
                             }`}
                         >
+                          <FontAwesomeIcon icon={faHistory} className="mr-2" />
                           History
                         </button>
                         <button
                             onClick={() => setGeneralSettingsTab(1)}
                             className={`px-4 py-2 rounded ${
-                                generalSettingsTab === 1 ? 'bg-blue-500 text-white' : 'bg-gray-200'
+                                generalSettingsTab === 1
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-gray-200'
                             }`}
                         >
+                          <FontAwesomeIcon icon={faSyncAlt} className="mr-2" />
                           Regenerate
                         </button>
                         <button
                             onClick={() => setGeneralSettingsTab(4)}
                             className={`px-4 py-2 rounded ${
-                                generalSettingsTab === 4 ? 'bg-blue-500 text-white' : 'bg-gray-200'
+                                generalSettingsTab === 4
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-gray-200'
                             }`}
                         >
+                          <FontAwesomeIcon icon={faThList} className="mr-2" />
                           Categories
                         </button>
                         <button
                             onClick={() => setGeneralSettingsTab(5)}
                             className={`px-4 py-2 rounded ${
-                                generalSettingsTab === 5 ? 'bg-blue-500 text-white' : 'bg-gray-200'
+                                generalSettingsTab === 5
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-gray-200'
                             }`}
                         >
+                          <FontAwesomeIcon icon={faStore} className="mr-2" />
                           Markets
                         </button>
                       </div>
@@ -569,7 +622,9 @@ const App = () => {
                                   </select>
                                 </div>
                                 <div className="flex items-center">
-                                  <label className="block text-sm font-medium mr-4">Range</label>
+                                  <label className="block text-sm font-medium mr-4">
+                                    Range
+                                  </label>
                                   <div className="flex items-center">
                                     <DatePicker
                                         selected={startDate}
@@ -577,10 +632,10 @@ const App = () => {
                                         selectsStart
                                         startDate={startDate}
                                         endDate={endDate}
+                                        showTimeSelect
+                                        dateFormat="yyyy-MM-dd h:mm aa"
                                         className="border border-gray-300 rounded px-2 py-1"
-                                        dateFormat="yyyy-MM-dd"
                                     />
-                                    <span className="mx-2">to</span>
                                     <DatePicker
                                         selected={endDate}
                                         onChange={(date) => setEndDate(date)}
@@ -588,9 +643,11 @@ const App = () => {
                                         startDate={startDate}
                                         endDate={endDate}
                                         minDate={startDate}
+                                        showTimeSelect
+                                        dateFormat="yyyy-MM-dd h:mm aa"
                                         className="border border-gray-300 rounded px-2 py-1"
-                                        dateFormat="yyyy-MM-dd"
                                     />
+
                                   </div>
                                 </div>
                                 <button
@@ -614,6 +671,9 @@ const App = () => {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                       Payload
                                     </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                      DateTime
+                                    </th>
                                   </tr>
                                   </thead>
                                   <tbody className="bg-white divide-y divide-gray-200">
@@ -621,6 +681,7 @@ const App = () => {
                                       <tr key={generateUniqueKey(item.partitionKey, item.rowKey)}>
                                         <td className="px-6 py-4 whitespace-nowrap">{item.Status}</td>
                                         <td className="px-6 py-4 whitespace-nowrap">{item.Payload}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap">{new Date(item.Timestamp).toLocaleString()}</td>
                                       </tr>
                                   ))}
                                   </tbody>
@@ -631,7 +692,10 @@ const App = () => {
                         {/* Regenerate Tab */}
                         {generalSettingsTab === 1 && (
                             <div className="mt-4">
-                              <button className="bg-blue-500 text-white px-4 py-2 rounded">Start Regeneration</button>
+                              <button className="bg-blue-500 text-white px-4 py-2 rounded"
+                                      onClick={handleStartRegeneration}>
+                                Start Regeneration
+                              </button>
                             </div>
                         )}
                         {/* Categories Tab */}
@@ -660,7 +724,9 @@ const App = () => {
                                   Add Category
                                 </button>
                               </div>
-                              {identifierError && <div className="text-red-500 mb-2">{identifierError}</div>}
+                              {identifierError && (
+                                  <div className="text-red-500 mb-2">{identifierError}</div>
+                              )}
                               <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                 <tr>
@@ -677,7 +743,9 @@ const App = () => {
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
                                 {categories.map((category, index) => (
-                                    <tr key={generateUniqueKey(category.partitionKey, category.rowKey)}>
+                                    <tr
+                                        key={generateUniqueKey(category.partitionKey, category.rowKey)}
+                                    >
                                       <td className="px-6 py-4 whitespace-nowrap">
                                         {editingCategoryIndex === index ? (
                                             <input
@@ -695,7 +763,9 @@ const App = () => {
                                             <input
                                                 type="text"
                                                 value={newCategoryIdentifier}
-                                                onChange={(e) => setNewCategoryIdentifier(e.target.value)}
+                                                onChange={(e) =>
+                                                    setNewCategoryIdentifier(e.target.value)
+                                                }
                                                 className="border border-gray-300 rounded p-2"
                                             />
                                         ) : (
@@ -759,7 +829,9 @@ const App = () => {
                                   Add Market
                                 </button>
                               </div>
-                              {identifierError && <div className="text-red-500 mb-2">{identifierError}</div>}
+                              {identifierError && (
+                                  <div className="text-red-500 mb-2">{identifierError}</div>
+                              )}
                               <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                 <tr>
@@ -776,7 +848,9 @@ const App = () => {
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
                                 {markets.map((market, index) => (
-                                    <tr key={generateUniqueKey(market.partitionKey, market.rowKey)}>
+                                    <tr
+                                        key={generateUniqueKey(market.partitionKey, market.rowKey)}
+                                    >
                                       <td className="px-6 py-4 whitespace-nowrap">
                                         {editingMarketIndex === index ? (
                                             <input
@@ -794,7 +868,9 @@ const App = () => {
                                             <input
                                                 type="text"
                                                 value={newMarketIdentifier}
-                                                onChange={(e) => setNewMarketIdentifier(e.target.value)}
+                                                onChange={(e) =>
+                                                    setNewMarketIdentifier(e.target.value)
+                                                }
                                                 className="border border-gray-300 rounded p-2"
                                             />
                                         ) : (
@@ -838,7 +914,7 @@ const App = () => {
 
                 {/* Markets List */}
                 {(activeView === 'markets' || activeView === 'details') && (
-                    <div className="bg-white shadow-md rounded-lg p-4 col-span-2">
+                    <div className="bg-white shadow-md rounded-lg p-4 col-span-2 min-height-800">
                       <h2 className="text-lg font-semibold mb-4">Markets</h2>
                       <ul className="space-y-2">
                         {markets.map((market, index) => (
@@ -846,7 +922,9 @@ const App = () => {
                                 key={generateUniqueKey(market.partitionKey, market.rowKey)}
                                 onClick={() => handleMarketClick(market, index)}
                                 className={`cursor-pointer p-2 rounded ${
-                                    selectedMarket?.rowKey === market.rowKey ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'
+                                    selectedMarket?.rowKey === market.rowKey
+                                        ? 'bg-blue-500 text-white'
+                                        : 'hover:bg-gray-100'
                                 }`}
                             >
                               {market.Name}
@@ -858,7 +936,7 @@ const App = () => {
 
                 {/* Market Details */}
                 {activeView === 'details' && selectedMarket && (
-                    <div className="bg-white shadow-md rounded-lg p-4 col-span-8">
+                    <div className="bg-white shadow-md rounded-lg p-4 col-span-8 min-height-800">
                       <h2 className="text-lg font-semibold mb-4">Details</h2>
                       <div className="flex space-x-4 mb-4">
                         <button
@@ -867,6 +945,7 @@ const App = () => {
                                 selectedTab === 0 ? 'bg-blue-500 text-white' : 'bg-gray-200'
                             }`}
                         >
+                          <FontAwesomeIcon icon={faEdit} className="mr-2" />
                           Template Layout
                         </button>
                         <button
@@ -875,6 +954,7 @@ const App = () => {
                                 selectedTab === 1 ? 'bg-blue-500 text-white' : 'bg-gray-200'
                             }`}
                         >
+                          <FontAwesomeIcon icon={faPalette} className="mr-2" />
                           Styling
                         </button>
                         <button
@@ -883,6 +963,7 @@ const App = () => {
                                 selectedTab === 2 ? 'bg-blue-500 text-white' : 'bg-gray-200'
                             }`}
                         >
+                          <FontAwesomeIcon icon={faLanguage} className="mr-2" />
                           Translations
                         </button>
                         <button
@@ -891,6 +972,7 @@ const App = () => {
                                 selectedTab === 3 ? 'bg-blue-500 text-white' : 'bg-gray-200'
                             }`}
                         >
+                          <FontAwesomeIcon icon={faCogs} className="mr-2" />
                           Settings
                         </button>
                       </div>
@@ -901,7 +983,7 @@ const App = () => {
                       <textarea
                           value={templateLayoutText}
                           onChange={(e) => setTemplateLayoutText(e.target.value)}
-                          className="w-full h-32 border border-gray-300 rounded p-2"
+                          className="w-full h-[600px] border border-gray-300 rounded p-2"
                           placeholder="Edit Template Layout here..."
                       />
                             </div>
@@ -912,7 +994,7 @@ const App = () => {
                       <textarea
                           value={templateStylingText}
                           onChange={(e) => setTemplateStylingText(e.target.value)}
-                          className="w-full h-32 border border-gray-300 rounded p-2"
+                          className="w-full h-[600px] border border-gray-300 rounded p-2"
                           placeholder="Edit Styling here..."
                       />
                             </div>
@@ -948,7 +1030,9 @@ const App = () => {
                                             <input
                                                 type="text"
                                                 value={newTranslationKey}
-                                                onChange={(e) => setNewTranslationKey(e.target.value)}
+                                                onChange={(e) =>
+                                                    setNewTranslationKey(e.target.value)
+                                                }
                                                 className="border border-gray-300 rounded p-2"
                                             />
                                         ) : (
@@ -960,7 +1044,9 @@ const App = () => {
                                             <input
                                                 type="text"
                                                 value={newTranslationValue}
-                                                onChange={(e) => setNewTranslationValue(e.target.value)}
+                                                onChange={(e) =>
+                                                    setNewTranslationValue(e.target.value)
+                                                }
                                                 className="border border-gray-300 rounded p-2"
                                             />
                                         ) : (
