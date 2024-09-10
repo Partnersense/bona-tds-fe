@@ -34,6 +34,15 @@ const App = () => {
   const [newMarketName, setNewMarketName] = useState('');
   const [newMarketIdentifier, setNewMarketIdentifier] = useState('');
   const [loading, setLoading] = useState(false);
+  const [notification, setNotification] = useState({ message: '', type: '' });
+
+
+  const showNotification = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => {
+      setNotification({ message: '', type: '' });
+    }, 3000); // Hide notification after 3 seconds
+  };
 
   const categoriesClient = useMemo(
       () => new TableClient(accountUrl, 'Categories', new AzureSASCredential(sasToken)),
@@ -155,8 +164,10 @@ const App = () => {
 
     try {
       await categoriesClient.upsertEntity(category, 'Replace');
+      showNotification('Category saved successfully!', 'success'); // Show success message
       console.log('Category replaced successfully.');
     } catch (error) {
+      showNotification('Failed to save category. Please try again.', 'error'); // Show error message
       console.error('Error replacing category:', error);
     }
   };
@@ -274,11 +285,13 @@ const App = () => {
   const handleSaveMarket = async (index) => {
     if (index === null || index < 0 || index >= markets.length) {
       console.error('Invalid market index:', index);
+      showNotification('An issue occured while saving Market', 'error');
       return;
     }
 
     const market = markets[index];
     if (!market) {
+      showNotification('An issue occured while saving Market', 'error');
       console.error('Market not found at index:', index);
       return;
     }
@@ -297,6 +310,7 @@ const App = () => {
     try {
       await marketsClient.updateEntity(updatedMarket, 'Replace');
       console.log('Market updated successfully.');
+      showNotification('Market updated successfully', 'success');
 
       setMarkets((prevMarkets) => {
         const updatedMarkets = [...prevMarkets];
@@ -306,13 +320,14 @@ const App = () => {
       });
     } catch (error) {
       console.error('Error updating market:', error.message);
-      alert(`Failed to update market: ${error.message}`);
+      showNotification('An issue occured while updating Market', 'error');
     }
   };
 
   const handleEditMarket = (index) => {
     if (index === null || index < 0 || index >= markets.length) {
       console.error('Invalid market index:', index);
+      showNotification('An issue occured while saving Market', 'error');
       return;
     }
 
@@ -329,6 +344,7 @@ const App = () => {
   const handleDeleteMarket = async (index) => {
     if (index < 0 || index >= markets.length) {
       console.error('Invalid market index');
+      showNotification('An issue occured while deleting Market', 'error');
       return;
     }
 
@@ -339,8 +355,10 @@ const App = () => {
     try {
       await marketsClient.deleteEntity(marketToDelete.partitionKey, marketToDelete.rowKey);
       console.log('Market deleted successfully.');
+      showNotification('Market deleted', 'success');
     } catch (error) {
       console.error('Error deleting market:', error);
+      showNotification('An issue occured while deleting Market', 'error');
     }
   };
 
@@ -447,9 +465,19 @@ const App = () => {
 
   return (
       <div className="App">
-        <div className="container mx-auto p-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="container mx-auto p-4 grid grid-cols-12 gap-4">
+          {/* Notification Component */}
+          {notification.message && (
+              <div
+                  className={`fixed top-4 right-4 p-4 rounded shadow-lg ${
+                      notification.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+                  }`}
+              >
+                {notification.message}
+              </div>
+          )}
           {/* Sidebar - Categories */}
-          <div className="bg-white shadow-md rounded-lg p-4 col-span-1">
+          <div className="bg-white shadow-md rounded-lg p-4 col-span-2">
             <h2 className="text-lg font-semibold mb-4">Categories</h2>
             <ul className="space-y-2">
               {categories.map((category) => (
@@ -464,7 +492,7 @@ const App = () => {
                   </li>
               ))}
             </ul>
-            <hr className="my-4" />
+            <hr className="my-4"/>
             <ul className="space-y-2">
               <li
                   className={`cursor-pointer p-2 rounded flex items-center ${
@@ -485,7 +513,7 @@ const App = () => {
           ) : (
               <>
                 {activeView === 'settings' && (
-                    <div className="bg-white shadow-md rounded-lg p-4 col-span-3">
+                    <div className="bg-white shadow-md rounded-lg p-4 col-span-8">
                       {/* General Settings View */}
                       <h2 className="text-lg font-semibold mb-4">General Settings</h2>
                       <div className="flex space-x-4 mb-4">
@@ -810,7 +838,7 @@ const App = () => {
 
                 {/* Markets List */}
                 {(activeView === 'markets' || activeView === 'details') && (
-                    <div className="bg-white shadow-md rounded-lg p-4 col-span-1">
+                    <div className="bg-white shadow-md rounded-lg p-4 col-span-2">
                       <h2 className="text-lg font-semibold mb-4">Markets</h2>
                       <ul className="space-y-2">
                         {markets.map((market, index) => (
@@ -830,7 +858,7 @@ const App = () => {
 
                 {/* Market Details */}
                 {activeView === 'details' && selectedMarket && (
-                    <div className="bg-white shadow-md rounded-lg p-4 col-span-3">
+                    <div className="bg-white shadow-md rounded-lg p-4 col-span-8">
                       <h2 className="text-lg font-semibold mb-4">Details</h2>
                       <div className="flex space-x-4 mb-4">
                         <button
