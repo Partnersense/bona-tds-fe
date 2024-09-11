@@ -288,6 +288,9 @@ const App = () => {
       return;
     }
 
+    console.log(newCategoryName)
+    console.log(newCategoryIdentifier)
+
     const newCategory = {
       partitionKey: 'Categories',
       rowKey: newCategoryIdentifier,
@@ -312,20 +315,21 @@ const App = () => {
   const createMarketsForNewCategory = async (newCategory) => {
     try {
       const existingMarkets = await marketsClient.listEntities();
-      const existingMarketIdentifiers = new Set();
+      const existingMarketIdentifiers = new Map();
 
+      // Use a Map to store identifiers and corresponding names
       for await (const market of existingMarkets) {
-        existingMarketIdentifiers.add(market.rowKey);
+        existingMarketIdentifiers.set(market.rowKey, market.Name);
       }
 
       const categoriesEntities = categoriesClient.listEntities();
       for await (const category of categoriesEntities) {
-        for (const rowKey of existingMarketIdentifiers) {
+        for (const [rowKey, name] of existingMarketIdentifiers) {
           const newMarket = {
             partitionKey: category.Identifier,
             rowKey,
-            Name: rowKey,
-            Identifier: rowKey,
+            Name: name, // Use the correct name
+            Identifier: rowKey, // Use the rowKey as the identifier
             TemplateLayout: '',
             Styling: '',
             Translations: JSON.stringify([]),
