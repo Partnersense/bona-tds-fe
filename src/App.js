@@ -207,10 +207,9 @@ const App = () => {
 
       await historyClient.createEntity(newHistoryRecord);
       setHistory([...history, newHistoryRecord]);
-      showNotification('Regeneration started and recorded in history.', 'success');
+      showNotification('Regeneration started', 'success');
     } catch (error) {
-      console.error('Error saving history record:', error);
-      showNotification('Failed to save history record. Please try again.', 'error');
+      showNotification('Failed to start regeneration.', 'error');
     }
   };
 
