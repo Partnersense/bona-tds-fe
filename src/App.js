@@ -5,6 +5,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import apiClient from './apiClient';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCogs, faEdit, faTrash, faCheck } from '@fortawesome/free-solid-svg-icons';
+import debounce from 'lodash.debounce'; // Install lodash.debounce or use a custom debounce function
 
 const App = () => {
   // State Definitions
@@ -36,6 +37,19 @@ const App = () => {
   const [endDate, setEndDate] = useState(new Date());
   const [status, setStatus] = useState('All');
   const [generalSettingsTab, setGeneralSettingsTab] = useState(0); 
+
+
+// Function to handle input change and auto-save
+const handleTranslationChange = (index, field, value) => {
+  const updatedTranslations = [...translations];
+  updatedTranslations[index][field] = value;
+  setTranslations(updatedTranslations);
+};
+
+// Debounced save function to update translations state
+const debouncedHandleTranslationChange = debounce(handleTranslationChange, 10);
+
+
 
   // Show notification function
   const showNotification = (message, type = 'success') => {
@@ -115,44 +129,125 @@ const App = () => {
     setGeneralSettingsTab(0);
   };
 
-  // Function to handle clicking on a market
-  const handleMarketClick = (market, index) => {
-    setSelectedTab(0); // Default to the first tab
-    setActiveView('details'); // Switch to details view
-    setSelectedMarket(market); // Set the selected market
+// Function to handle clicking on a market
+const handleMarketClick = (market, index) => {
+  setSelectedTab(0); // Default to the first tab
+  setActiveView('details'); // Switch to details view
+  setSelectedMarket(market); // Set the selected market
 
-    // Safely parse settings and translations
-    let parsedSettings = {};
-    let parsedTranslations = [];
+  // Safely parse settings and translations
+  let parsedSettings = {};
+  let parsedTranslations = [];
 
-    try {
-      // Check if settings is a valid JSON string
-      if (market.settings && market.settings.trim().startsWith('{')) {
-        parsedSettings = JSON.parse(market.settings);
-      } else {
-        console.warn('Settings is not a valid JSON string:', market.settings);
-      }
-    } catch (error) {
-      console.error('Error parsing settings:', error);
+  try {
+    if (market.settings && market.settings.trim().startsWith('{')) {
+      parsedSettings = JSON.parse(market.settings);
+    } else {
+      console.warn('Settings is not a valid JSON string:', market.settings);
     }
+  } catch (error) {
+    console.error('Error parsing settings:', error);
+  }
 
-    try {
-      // Check if translations is a valid JSON string
-      if (market.translations && market.translations.trim().startsWith('[')) {
-        parsedTranslations = JSON.parse(market.translations);
-      } else {
-        console.warn('Translations is not a valid JSON string:', market.translations);
-      }
-    } catch (error) {
-      console.error('Error parsing translations:', error);
+  try {
+    if (market.translations && market.translations.trim().startsWith('[')) {
+      parsedTranslations = JSON.parse(market.translations);
+    } else {
+      console.warn('Translations is not a valid JSON string:', market.translations);
     }
+  } catch (error) {
+    console.error('Error parsing translations:', error);
+  }
 
-    setTemplateLayoutText(market.templateLayout || '');
-    setTemplateStylingText(market.styling || '');
-    setTranslations(parsedTranslations);
-    setAutoRegenerate(parsedSettings.allowAutoRegeneration || false);
-    setEditingMarketIndex(index);
+  setTemplateLayoutText(market.templateLayout || '');
+  setTemplateStylingText(market.styling || '');
+  setTranslations(parsedTranslations);
+  setAutoRegenerate(parsedSettings.allowAutoRegeneration || false);
+  setNewMarketName(market.name || ''); // Set market name
+  setNewMarketIdentifier(market.identifier || market.rowKey); // Set market identifier from either input or existing data
+  setEditingMarketIndex(index);
+};
+
+// Function to save market details for a category
+const saveMarketForCategory = async (index) => {
+  if (index === null || index < 0 || index >= markets.length) {
+    console.error('Invalid market index:', index);
+    showNotification('An issue occurred while saving the market', 'error');
+    return;
+  }
+
+  const market = markets[index];
+  if (!market) {
+    showNotification('An issue occurred while saving the market', 'error');
+    console.error('Market not found at index:', index);
+    return;
+  }
+
+  // Ensure Name and Identifier are provided and not empty
+  const marketName = newMarketName.trim() || market.name;
+  const marketIdentifier = market.rowKey;
+
+  if (!marketName) {
+    console.error('Market Name is missing.');
+    showNotification('Market Name is required', 'error');
+    return;
+  }
+
+  if (!marketIdentifier) {
+    console.error('Market Identifier is missing.');
+    showNotification('Market Identifier is required', 'error');
+    return;
+  }
+
+  // Prepare updated market object
+  const updatedMarket = {
+    partitionKey: selectedCategory?.rowKey || market.partitionKey, // Ensure correct category ID is used
+    rowKey: marketIdentifier, // Use the Identifier as rowKey
+    Name: marketName,
+    Identifier: marketIdentifier,
+    TemplateLayout: templateLayoutText,
+    Styling: templateStylingText,
+    Translations: JSON.stringify(translations),
+    Settings: JSON.stringify({ allowAutoRegeneration: autoRegenerate }),
   };
+
+  console.log(`Updating market for category ${selectedCategory?.rowKey}:`, updatedMarket);
+
+  try {
+    // Perform PUT request to update market
+    const response = await apiClient.put(
+      `/configuration/categories/${selectedCategory?.rowKey}/markets/${marketIdentifier}`,
+      updatedMarket
+    );
+    console.log('Market updated successfully:', response.data);
+    showNotification('Market updated successfully', 'success');
+
+    // Re-fetch markets after successfully saving the market
+    await fetchMarkets(selectedCategory?.rowKey);
+
+    // Alternatively, directly update the markets state without re-fetching
+    setMarkets((prevMarkets) => {
+      const updatedMarkets = [...prevMarkets];
+      updatedMarkets[index] = { ...market, ...updatedMarket };
+      setSelectedMarket(updatedMarkets[index]);
+      return updatedMarkets;
+    });
+  } catch (error) {
+    console.error('Error updating market:', error.message);
+
+    // Check for server validation errors
+    if (error.response && error.response.data.errors) {
+      console.error('Error details:', error.response.data.errors);
+
+      const identifierError = error.response.data.errors.Identifier?.[0];
+      if (identifierError) {
+        showNotification(identifierError, 'error');
+      }
+    } else {
+      showNotification('An issue occurred while updating the market', 'error');
+    }
+  }
+};
 
   // Function to add a new translation
   const handleAddTranslation = () => {
@@ -187,55 +282,6 @@ const App = () => {
     setAutoRegenerate(!autoRegenerate);
   };
 
-  // Function to save market details for a category
-  const saveMarketForCategory = async (index) => {
-    if (index === null || index < 0 || index >= markets.length) {
-      console.error('Invalid market index:', index);
-      showNotification('An issue occurred while saving the market', 'error');
-      return;
-    }
-
-    const market = markets[index];
-    if (!market) {
-      showNotification('An issue occurred while saving the market', 'error');
-      console.error('Market not found at index:', index);
-      return;
-    }
-
-    const updatedMarket = {
-      partitionKey: selectedCategory?.Identifier || 'Default',
-      rowKey: market.rowKey,
-      Name: newMarketName || market.name,
-      Identifier: newMarketIdentifier || market.identifier,
-      TemplateLayout: templateLayoutText,
-      Styling: templateStylingText,
-      Translations: JSON.stringify(translations),
-      Settings: JSON.stringify({ allowAutoRegeneration: autoRegenerate }),
-    };
-
-    try {
-      const categoryId = selectedCategory?.rowKey; // Ensure correct category ID is used
-      if (!categoryId) {
-        console.error('Category ID is missing.');
-        showNotification('Category ID is missing', 'error');
-        return;
-      }
-
-      await apiClient.put(`/configuration/categories/${categoryId}/markets/${market.rowKey}`, updatedMarket);
-      console.log('Market updated successfully.');
-      showNotification('Market updated successfully', 'success');
-
-      setMarkets((prevMarkets) => {
-        const updatedMarkets = [...prevMarkets];
-        updatedMarkets[index] = { ...market, ...updatedMarket };
-        setSelectedMarket(updatedMarkets[index]);
-        return updatedMarkets;
-      });
-    } catch (error) {
-      console.error('Error updating market:', error.message);
-      showNotification('An issue occurred while updating the market', 'error');
-    }
-  };
 
   // Fetch categories on component mount
   useEffect(() => {
@@ -395,112 +441,74 @@ const App = () => {
                     </div>
                   )}
 
-                  {selectedTab === 2 && (
-                    <div className="mt-4">
-                      <button
-                        className="bg-blue-500 text-white px-4 py-2 rounded mb-4"
-                        onClick={handleAddTranslation}
-                      >
-                        + Add Translation
-                      </button>
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Key
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Translation
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Action
-                            </th>
-                          </tr>
-                        </thead>
-
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {Array.isArray(translations) &&
-                            translations.map((translation, index) => (
-                              <tr key={`${translation.Key}-${index}`}>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  {editingRow === index ? (
-                                    <input
-                                      type="text"
-                                      value={newTranslationKey}
-                                      onChange={(e) => setNewTranslationKey(e.target.value)}
-                                      className="border border-gray-300 rounded p-2"
-                                    />
-                                  ) : (
-                                    translation.Key
-                                  )}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  {editingRow === index ? (
-                                    <input
-                                      type="text"
-                                      value={newTranslationValue}
-                                      onChange={(e) => setNewTranslationValue(e.target.value)}
-                                      className="border border-gray-300 rounded p-2"
-                                    />
-                                  ) : (
-                                    translation.Value
-                                  )}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap flex items-center space-x-2 justify-center">
-                                  {editingRow === index ? (
-                                    <button
-                                      onClick={() => handleSaveTranslation(index)}
-                                      className="text-blue-500 hover:text-blue-700 flex items-center justify-center"
-                                      style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        padding: 0,
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                      }}
-                                    >
-                                      <FontAwesomeIcon icon={faCheck} />
-                                    </button>
-                                  ) : (
-                                    <>
-                                      <button
-                                        onClick={() => handleEditTranslation(index)}
-                                        className="text-yellow-500 hover:text-yellow-700 flex items-center justify-center"
-                                        style={{
-                                          background: 'none',
-                                          border: 'none',
-                                          padding: 0,
-                                          cursor: 'pointer',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                        }}
-                                      >
-                                        <FontAwesomeIcon icon={faEdit} />
-                                      </button>
-                                      <button
-                                        onClick={() => handleDeleteTranslation(index)}
-                                        className="text-red-500 hover:text-red-700 flex items-center justify-center"
-                                        style={{
-                                          background: 'none',
-                                          border: 'none',
-                                          padding: 0,
-                                          cursor: 'pointer',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                        }}
-                                      >
-                                        <FontAwesomeIcon icon={faTrash} />
-                                      </button>
-                                    </>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+{selectedTab === 2 && (
+  <div className="mt-4">
+    <button
+      className="bg-blue-500 text-white px-4 py-2 rounded mb-4"
+      onClick={handleAddTranslation}
+    >
+      + Add Translation
+    </button>
+    <table className="min-w-full divide-y divide-gray-200">
+      <thead className="bg-gray-50">
+        <tr>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Key
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Translation
+          </th>
+          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            Action
+          </th>
+        </tr>
+      </thead>
+      <tbody className="bg-white divide-y divide-gray-200">
+  {Array.isArray(translations) &&
+    translations.map((translation, index) => (
+      <tr key={`${translation.Key}-${index}`}>
+        <td className="px-6 py-4 whitespace-nowrap">
+          <input
+            type="text"
+            value={translation.Key}
+            onChange={(e) =>
+              debouncedHandleTranslationChange(index, 'Key', e.target.value)
+            }
+            className="border border-gray-300 rounded p-2"
+          />
+        </td>
+        <td className="px-6 py-4 whitespace-nowrap">
+          <input
+            type="text"
+            value={translation.Value}
+            onChange={(e) =>
+              debouncedHandleTranslationChange(index, 'Value', e.target.value)
+            }
+            className="border border-gray-300 rounded p-2"
+          />
+        </td>
+        <td className="px-6 py-4 whitespace-nowrap flex items-center space-x-2 justify-center">
+          <button
+            onClick={() => handleDeleteTranslation(index)}
+            className="text-red-500 hover:text-red-700 flex items-center justify-center"
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <FontAwesomeIcon icon={faTrash} />
+          </button>
+        </td>
+      </tr>
+    ))}
+</tbody>
+    </table>
+  </div>
+)}
 
                   {selectedTab === 3 && (
                     <div className="mt-4">
