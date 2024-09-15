@@ -115,45 +115,44 @@ const App = () => {
     setGeneralSettingsTab(0);
   };
 
- // Function to handle clicking on a market
- // Function to handle clicking on a market
- const handleMarketClick = (market, index) => {
-  setSelectedTab(0); // Default to the first tab
-  setActiveView('details'); // Switch to details view
-  setSelectedMarket(market); // Set the selected market
+  // Function to handle clicking on a market
+  const handleMarketClick = (market, index) => {
+    setSelectedTab(0); // Default to the first tab
+    setActiveView('details'); // Switch to details view
+    setSelectedMarket(market); // Set the selected market
 
-  // Safely parse settings and translations
-  let parsedSettings = {};
-  let parsedTranslations = [];
+    // Safely parse settings and translations
+    let parsedSettings = {};
+    let parsedTranslations = [];
 
-  try {
-    // Check if settings is a valid JSON string
-    if (market.settings && market.settings.trim().startsWith('{')) {
-      parsedSettings = JSON.parse(market.settings);
-    } else {
-      console.warn('Settings is not a valid JSON string:', market.settings);
+    try {
+      // Check if settings is a valid JSON string
+      if (market.settings && market.settings.trim().startsWith('{')) {
+        parsedSettings = JSON.parse(market.settings);
+      } else {
+        console.warn('Settings is not a valid JSON string:', market.settings);
+      }
+    } catch (error) {
+      console.error('Error parsing settings:', error);
     }
-  } catch (error) {
-    console.error('Error parsing settings:', error);
-  }
 
-  try {
-    // Check if translations is a valid JSON string
-    if (market.translations && market.translations.trim().startsWith('[')) {
-      parsedTranslations = JSON.parse(market.translations);
-    } else {
-      console.warn('Translations is not a valid JSON string:', market.translations);
+    try {
+      // Check if translations is a valid JSON string
+      if (market.translations && market.translations.trim().startsWith('[')) {
+        parsedTranslations = JSON.parse(market.translations);
+      } else {
+        console.warn('Translations is not a valid JSON string:', market.translations);
+      }
+    } catch (error) {
+      console.error('Error parsing translations:', error);
     }
-  } catch (error) {
-    console.error('Error parsing translations:', error);
-  }
 
-  setTemplateLayoutText(market.templateLayout || '');
-  setTemplateStylingText(market.styling || '');
-  setTranslations(parsedTranslations);
-  setAutoRegenerate(parsedSettings.allowAutoRegeneration || false);
-  setEditingMarketIndex(index);
-};
+    setTemplateLayoutText(market.templateLayout || '');
+    setTemplateStylingText(market.styling || '');
+    setTranslations(parsedTranslations);
+    setAutoRegenerate(parsedSettings.allowAutoRegeneration || false);
+    setEditingMarketIndex(index);
+  };
 
   // Function to add a new translation
   const handleAddTranslation = () => {
@@ -320,7 +319,7 @@ const App = () => {
                       key={`${market.partitionKey}-${market.rowKey}`}
                       onClick={() => handleMarketClick(market, index)}
                       className={`cursor-pointer p-2 rounded ${
-                        selectedMarket?.Identifier === market.identifier
+                        selectedMarket?.rowKey === market.rowKey
                           ? 'bg-blue-500 text-white'
                           : 'hover:bg-gray-100'
                       }`}
