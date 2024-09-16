@@ -43,23 +43,33 @@ const App = () => {
     try {
       const response = await apiClient.get(`/configuration/items/${itemId}/versionHistory`);
       setVersions(response.data);
-      // Update today's versions and previews after fetching
       fetchTodaysVersions(response.data);
     } catch (error) {
       console.error('Error fetching item versions:', error);
     }
   }, [itemId]);
 
-  // Fetch today's versions
+  // Fetch today's versions and previews
   const fetchTodaysVersions = useCallback((versionsData = versions) => {
     const today = new Date().toISOString().slice(0, 10);
     const filteredVersions = versionsData.filter((version) => version.timestamp.startsWith(today));
     setTodaysVersions(filteredVersions);
-
-    // Filter previews from today's versions
-    const filteredPreviews = filteredVersions.filter((version) => version.type === 'Preview');
-    setTodaysPreviews(filteredPreviews);
   }, [versions]);
+
+  // Fetch today's previews
+  const fetchTodaysPreviews = useCallback(async () => {
+    try {
+      const response = await apiClient.get(`/configuration/items/${itemId}/files?isPreview=true`);
+      const files = response.data;
+
+      // Filter files from today
+      const today = new Date().toISOString().slice(0, 10);
+      const todaysFiles = files.filter((file) => new Date(file.lastModified).toISOString().startsWith(today));
+      setTodaysPreviews(todaysFiles);
+    } catch (error) {
+      console.error('Error fetching todays previews:', error);
+    }
+  }, [itemId]);
 
   // Check if the current category is valid
   const checkCategoryValidity = useCallback(async () => {
@@ -97,11 +107,17 @@ const App = () => {
   useEffect(() => {
     if (selectedItem === 'Render TDS') {
       fetchVersions(); // Initial fetch of versions
+      fetchTodaysPreviews(); // Initial fetch of previews
 
       // Set up polling for versions
       const versionsInterval = setInterval(() => {
         fetchVersions();
       }, 5000); // Fetch versions every 5 seconds
+
+      // Set up polling for previews
+      const previewsInterval = setInterval(() => {
+        fetchTodaysPreviews();
+      }, 5000); // Fetch previews every 5 seconds
 
       // Set up polling for jobs
       const jobsInterval = setInterval(() => {
@@ -111,10 +127,11 @@ const App = () => {
       // Clean up intervals on component unmount or change
       return () => {
         clearInterval(versionsInterval);
+        clearInterval(previewsInterval);
         clearInterval(jobsInterval);
       };
     }
-  }, [selectedItem, fetchVersions, fetchJobsForAllMarkets]);
+  }, [selectedItem, fetchVersions, fetchTodaysPreviews, fetchJobsForAllMarkets]);
 
   // Render POST request function
   const handleRender = async (isPreview = false) => {
@@ -282,7 +299,7 @@ const App = () => {
               <hr className="my-4" />
 
               {/* Table for Today's Versions */}
-              <h3 className="text-md font-semibold mb-2">Today's Versions</h3>
+              <h3 className="text-md font-semibold mb-2">Versions</h3>
               <table className="min-w-full divide-y divide-gray-200 mt-2">
                 <thead className="bg-gray-50">
                   <tr>
@@ -319,15 +336,12 @@ const App = () => {
               <hr className="my-4" />
 
               {/* Table for Today's Previews */}
-              <h3 className="text-md font-semibold mb-2">Today's Previews</h3>
+              <h3 className="text-md font-semibold mb-2">Previews</h3>
               <table className="min-w-full divide-y divide-gray-200 mt-2">
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       File Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Market
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Timestamp
@@ -340,11 +354,10 @@ const App = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {todaysPreviews.map((preview) => (
                     <tr key={`${preview.fileName}${preview.rowKey}`}>
-                      <td className="px-6 py-4 whitespace-nowrap">{preview.rowKey}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">{preview.market}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">{new Date(preview.timestamp).toLocaleString()}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">{preview.fileName}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">{new Date(preview.lastModified).toLocaleString()}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <a href={preview.uri} className="text-blue-500" download>
+                        <a href={preview.filePath} className="text-blue-500" download>
                           Download
                         </a>
                       </td>
