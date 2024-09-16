@@ -40,8 +40,12 @@ const App = () => {
     const [newCategoryName, setNewCategoryName] = useState('');
     const [newCategoryIdentifier, setNewCategoryIdentifier] = useState('');
     const [editingCategoryIndex, setEditingCategoryIndex] = useState(null);
-
     const [addingTranslation, setAddingTranslation] = useState(false);
+    const [AllMarkets, setAllMarkets] = useState([]);
+
+
+
+
   
     // Show notification function
     const showNotification = (message, type = 'success') => {
@@ -51,6 +55,10 @@ const App = () => {
       }, 3000);
     };
 
+
+
+
+    
 
       // Function to handle translation updates
   const handleEditTranslation = (index) => {
@@ -149,7 +157,7 @@ const App = () => {
   
     // Function to delete a category
     const handleDeleteCategory = async (index) => {
-      const categoryId = categories[index].Identifier;
+      const categoryId = categories[index].identifier;
   
       try {
         await apiClient.delete(`/configuration/categories/${categoryId}`);
@@ -191,6 +199,13 @@ const App = () => {
   
     // Debounced save function to update translations state
     const debouncedHandleTranslationChange = debounce(handleTranslationChange, 10);
+
+      // Function to handle market updates
+  const handleEditMarket = (index) => {
+    setEditingMarketIndex(index);
+    setNewMarketName(markets[index].name);
+    setNewMarketIdentifier(markets[index].identifier);
+  };
   
     // Function to fetch categories from API
     const fetchCategories = useCallback(async () => {
@@ -206,20 +221,67 @@ const App = () => {
       }
     }, []);
   
-    // Function to fetch markets based on selected category
+// Fetch all markets once on component mount
+const fetchAllMarkets = useCallback(async () => {
+  setLoading(true);
+  try {
+    const response = await apiClient.get('/configuration/markets/unique');
+    setAllMarkets(response.data);
+    
+    // Log all markets to the console
+    console.log('Fetched Markets:', response.data);
+  } catch (error) {
+    console.error('Error fetching all markets:', error);
+  } finally {
+    setLoading(false);
+  }
+}, []);
+
+
+
+  // Update a market and sync changes to both collections
+  const updateMarket = async (updatedMarket) => {
+      try {
+          await apiClient.put(`/configuration/markets/${updatedMarket.identifier}`, updatedMarket);
+          setAllMarkets((prev) =>
+              prev.map((market) => (market.Identifier === updatedMarket.identifier ? updatedMarket : market))
+          );
+          setMarkets((prev) =>
+              prev.map((market) => (market.Identifier === updatedMarket.identifier ? updatedMarket : market))
+          );
+      } catch (error) {
+          console.error('Error updating market:', error);
+      }
+  };
+
+  // Delete a market from both collections
+  const deleteMarket = async (marketId) => {
+      try {
+          await apiClient.delete(`/configuration/markets/${marketId}`);
+          setAllMarkets((prev) => prev.filter((market) => market.identifier !== marketId));
+          setMarkets((prev) => prev.filter((market) => market.identifier !== marketId));
+      } catch (error) {
+          console.error('Error deleting market:', error);
+      }
+  };
+
+
+    // Fetch markets based on selected category
     const fetchMarkets = useCallback(async (categoryIdentifier) => {
-      if (!categoryIdentifier) return;
+      if (!categoryIdentifier) {
+          setMarkets(AllMarkets); // If no category, show all markets
+          return;
+      }
       setLoading(true);
       try {
-        const response = await apiClient.get(`/configuration/categories/${categoryIdentifier}/markets`);
-        setMarkets(response.data);
+          const response = await apiClient.get(`/configuration/categories/${categoryIdentifier}/markets`);
+          setMarkets(response.data);
       } catch (error) {
-        console.error('Error fetching markets:', error);
-        showNotification('Error fetching markets', 'error');
+          console.error('Error fetching markets by category:', error);
       } finally {
-        setLoading(false);
+          setLoading(false);
       }
-    }, []);
+  }, [AllMarkets]);
   
     // Function to fetch history with applied filters
     const fetchHistory = useCallback(async (statusFilter, start, end, payloadFilter, pageSize) => {
@@ -379,6 +441,19 @@ const App = () => {
         }
       }
     };
+
+    const handleMarketsTabClick = () => {
+      setActiveView('markets');
+      setGeneralSettingsTab(5);
+      setEditingMarketIndex(null); // Reset the editing state
+    };
+
+    useEffect(() => {
+      // Reset editing state when changing to the Markets tab
+      if (generalSettingsTab === 5) {
+        setEditingMarketIndex(null);
+      }
+    }, [generalSettingsTab]);
   
     // Function to add a new category with unique identifier check
     const addCategory = async () => {
@@ -411,35 +486,91 @@ const App = () => {
     };
   
     // Function to add a new market with unique identifier check
-    const addMarket = async () => {
-      if (!newMarketName || !newMarketIdentifier) {
-        showNotification('Both name and identifier are required', 'error');
-        return;
-      }
-  
-      // Check for unique identifier
-      if (markets.some((mkt) => mkt.rowKey === newMarketIdentifier)) {
-        showNotification('Identifier must be unique', 'error');
-        return;
-      }
-  
-      const newMarket = {
-        partitionKey: selectedCategory?.rowKey || 'MarketPartition', // or the relevant partition key
-        rowKey: newMarketIdentifier,
+    const handleSaveMarket = async (index) => {
+      const updatedMarket = {
+        ...markets[index],
         Name: newMarketName,
         Identifier: newMarketIdentifier,
       };
-  
+    
       try {
-        await apiClient.post(`/configuration/categories/${selectedCategory?.rowKey}/markets`, newMarket);
-        showNotification('Market added successfully', 'success');
-        fetchMarkets(selectedCategory?.rowKey); // Refresh the markets list
+        await apiClient.put(`/configuration/categories/${selectedCategory?.rowKey}/markets/${updatedMarket.identifier}`, updatedMarket);
+        showNotification('Market updated successfully', 'success');
+        fetchAllMarkets(); // Refresh markets after update
+      } catch (error) {
+        console.error('Error updating market:', error);
+        showNotification('Error updating market', 'error');
+      }
+    
+      setEditingMarketIndex(null); // Reset editing state
+    };
+    
+    useEffect(() => {
+      fetchAllMarkets();
+  }, [fetchAllMarkets]);
+
+// Handle deleting a market by index with validation
+const handleDeleteMarket = async (index, fromAllMarkets = false) => {
+  // Determine the list to delete from
+  const targetList = fromAllMarkets ? AllMarkets : markets;
+
+  // Check if the index is within the valid range of the selected array
+  if (index < 0 || index >= targetList.length) {
+    console.error(`Invalid market index: ${index}`);
+    console.log('Current target list length:', targetList.length);
+    return; // Exit the function if the index is invalid
+  }
+
+  // Safely retrieve the market identifier using the valid index
+  const marketId = targetList[index]?.identifier;
+
+  if (!marketId) {
+    console.error(`Market identifier not found at index: ${index}`);
+    return;
+  }
+
+  try {
+    // Perform the delete operation
+    await apiClient.delete(`/configuration/markets/${marketId}`);
+    showNotification('Market deleted successfully', 'success');
+
+    if (fromAllMarkets) {
+      // Update AllMarkets list
+      setAllMarkets((prev) => prev.filter((_, i) => i !== index));
+    } else {
+      // Update markets list specific to the current category
+      setMarkets((prev) => prev.filter((_, i) => i !== index));
+    }
+
+    // Optionally re-fetch markets to ensure synchronization
+    fetchAllMarkets();
+  } catch (error) {
+    console.error('Error deleting market:', error);
+    showNotification('Error deleting market', 'error');
+  }
+};
+
+const handleAddMarket = () => {
+  const newMarket = {
+    Name: newMarketName.trim(),
+    Identifier: newMarketIdentifier.trim(),
+  };
+
+  addMarket(newMarket); // Correctly pass the market data
+};
+    
+    // Add a new market and update both collections
+    const addMarket = async (newMarket) => {
+      try {
+        console.log('New Market:', newMarket); // Check this output
+        await apiClient.post('/configuration/markets', newMarket);
+        setAllMarkets((prev) => [...prev, newMarket]);
+        setMarkets((prev) => [...prev, newMarket]);
+        fetchAllMarkets();
       } catch (error) {
         console.error('Error adding market:', error);
-        showNotification('An issue occurred while adding the market', 'error');
       }
     };
-  
     // Function to toggle the auto-regeneration switch
     const handleToggleSwitch = () => {
       setAutoRegenerate(!autoRegenerate);
@@ -459,17 +590,20 @@ const App = () => {
     <div className="App">
       <div className="container mx-auto p-4 grid grid-cols-12 gap-4">
         {/* Notification Component */}
-        {notification.message && (
-          <div
-            className={`fixed top-4 right-4 p-4 rounded shadow-lg ${
-              notification.type === 'success'
-                ? 'bg-green-500 text-white'
-                : 'bg-red-500 text-white'
-            }`}
-          >
-            {notification.message}
-          </div>
-        )}
+{/* Notification Component */}
+{notification.message && (
+  <div
+    className={`fixed top-4 right-4 p-4 rounded shadow-lg flex items-center ${
+      notification.type === 'success'
+        ? 'bg-green-500 text-white'
+        : notification.type === 'error'
+        ? 'bg-red-500 text-white'
+        : 'bg-blue-500 text-white' // Default to blue for loading state
+    }`}
+  >
+    <span>{notification.message}</span> {/* Only the message, no spinner */}
+  </div>
+)}
         {/* Sidebar - Categories */}
         <div className="bg-white shadow-md rounded-lg p-4 col-span-2 min-height-800">
           <h2 className="text-lg font-semibold mb-4">Categories</h2>
@@ -505,10 +639,10 @@ const App = () => {
 
         {/* Main Content */}
         {loading ? (
-          <div className="col-span-3 flex justify-center items-center min-height-800">
-            <div className="text-blue-500">Loading...</div>
-          </div>
-        ) : (
+  <div className="center-spinner col-span-12 min-height-800">
+    <div className="spinner"></div>
+  </div>
+) : (
           <>
             {activeView === 'settings' && (
               <div className="bg-white shadow-md rounded-lg p-4 col-span-8 min-height-800">
@@ -523,15 +657,7 @@ const App = () => {
                     <FontAwesomeIcon icon={faHistory} className="mr-2" />
                     History
                   </button>
-                  <button
-                    onClick={() => setGeneralSettingsTab(1)}
-                    className={`px-4 py-2 rounded ${
-                      generalSettingsTab === 1 ? 'bg-blue-500 text-white' : 'bg-gray-200'
-                    }`}
-                  >
-                    <FontAwesomeIcon icon={faSyncAlt} className="mr-2" />
-                    Regenerate
-                  </button>
+
                   <button
                     onClick={() => setGeneralSettingsTab(4)}
                     className={`px-4 py-2 rounded ${
@@ -542,14 +668,17 @@ const App = () => {
                     Categories
                   </button>
                   <button
-                    onClick={() => setGeneralSettingsTab(5)}
-                    className={`px-4 py-2 rounded ${
-                      generalSettingsTab === 5 ? 'bg-blue-500 text-white' : 'bg-gray-200'
-                    }`}
-                  >
-                    <FontAwesomeIcon icon={faStore} className="mr-2" />
-                    Markets
-                  </button>
+  onClick={() => {
+    setGeneralSettingsTab(5); // Set the active tab to "Markets"
+    setEditingMarketIndex(null); // Reset the editing state to null
+  }}
+  className={`px-4 py-2 rounded ${
+    generalSettingsTab === 5 ? 'bg-blue-500 text-white' : 'bg-gray-200'
+  }`}
+>
+  <FontAwesomeIcon icon={faStore} className="mr-2" />
+  Markets
+</button>
                 </div>
                 <div className="tab-content">
                   {/* History Tab */}
@@ -681,15 +810,7 @@ const App = () => {
                       </div>
                     </div>
                   )}
-                  {/* Regenerate Tab */}
-                  {generalSettingsTab === 1 && (
-                    <div className="mt-4">
-                      <button className="bg-blue-500 text-white px-4 py-2 rounded" onClick={() => console.log('Start Regeneration')}>
-                        <FontAwesomeIcon icon={faPlay} className="mr-2" />
-                        Start Regeneration
-                      </button>
-                    </div>
-                  )}
+
                   {/* Categories Tab */}
                   {generalSettingsTab === 4 && (
                     <div className="mt-4">
@@ -766,9 +887,75 @@ const App = () => {
 
                     </div>
                   )}
-                  {/* Markets Tab */}
-                  {/* Translations */}
-                  
+
+{generalSettingsTab === 5 && (
+  <div className="mt-4">
+    <h3 className="text-md font-semibold mb-2">Markets</h3>
+    <div className="flex space-x-2 mb-4">
+      <input
+        type="text"
+        value={newMarketName}
+        onChange={(e) => setNewMarketName(e.target.value)}
+        placeholder="Market Name"
+        className="flex-grow border border-gray-300 rounded p-2"
+      />
+      <input
+        type="text"
+        value={newMarketIdentifier}
+        onChange={(e) => setNewMarketIdentifier(e.target.value)}
+        placeholder="Identifier"
+        className="flex-grow border border-gray-300 rounded p-2"
+      />
+      <button
+        className="bg-blue-500 text-white px-4 py-2 rounded"
+        onClick={handleAddMarket}
+      >
+        Add Market
+      </button>
+    </div>
+    <ul className="space-y-2">
+      {/* Use AllMarkets for listing markets under General Settings */}
+      {AllMarkets.map((market, index) => (
+        <li
+          key={`${market.identifier}-${index}`}
+          className="flex items-center justify-between p-2 border rounded"
+        >
+          {editingMarketIndex === index ? (
+            <>
+              <input
+                type="text"
+                value={newMarketName}
+                onChange={(e) => setNewMarketName(e.target.value)}
+                className="border border-gray-300 rounded p-1 flex-grow"
+              />
+              <input
+                type="text"
+                value={newMarketIdentifier}
+                onChange={(e) => setNewMarketIdentifier(e.target.value)}
+                className="border border-gray-300 rounded p-1 flex-grow"
+              />
+              <button onClick={() => handleSaveMarket(index)} className="text-green-500 ml-2">
+                Save
+              </button>
+            </>
+          ) : (
+            <>
+              <span>{market.name}</span>
+              <div className="flex items-center space-x-2">
+                <button onClick={() => handleEditMarket(index)} className="text-blue-500">
+                  <FontAwesomeIcon icon={faEdit} />
+                </button>
+                <button onClick={() => handleDeleteMarket(index, true)} className="text-red-500">
+                  <FontAwesomeIcon icon={faTrash} />
+                </button>
+              </div>
+            </>
+          )}
+        </li>
+      ))}
+    </ul>
+  </div>
+)}
                 </div>
               </div>
             )}
