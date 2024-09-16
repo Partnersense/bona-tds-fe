@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.min-height-800 {
+    min-height: 800px;
+}
+
+button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem; /* Optional: adjust padding for better click area */
+    transition: color 0.2s;
+}
+
+button:focus {
+    outline: none; /* Remove focus outline for cleaner look */
+}
+
+button:hover .faEdit, button:hover .faTrash {
+    color: #ff9800; /* Hover color can be customized */
+}
+
+.button-green {
+    background-color: #38a169; /* Green color */
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease;
+}
+
+.button-green:hover {
+    background-color: #2f855a; /* Darker green on hover */
+}
+
+.button-green .fa-check {
+    margin-right: 0.5rem; /* Adjust icon spacing */
+}
+
+/* Spinner Styles */
+.spinner {
+    display: inline-block;
+    width: 12px; /* Smaller size for notification */
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3); /* Light border */
+    border-radius: 50%;
+    border-top-color: #fff; /* White top border */
+    animation: spin 0.8s linear infinite;
+  }
+  
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  
+  /* Center spinner for full-page loading */
+  .center-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* Full height to center vertically */
+  }
