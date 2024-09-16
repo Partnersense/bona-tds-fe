@@ -8,371 +8,79 @@ import { faCogs, faEdit, faTrash, faCheck, faHistory, faSyncAlt, faThList, faSto
 import debounce from 'lodash.debounce'; // Install lodash.debounce or use a custom debounce function
 
 const App = () => {
-  // State Definitions
-  const [categories, setCategories] = useState([]);
-  const [markets, setMarkets] = useState([]);
-  const [history, setHistory] = useState([]);
-  const [activeView, setActiveView] = useState('none');
-  const [selectedTab, setSelectedTab] = useState(0);
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [selectedMarket, setSelectedMarket] = useState(null);
-  const [templateLayoutText, setTemplateLayoutText] = useState('');
-  const [templateStylingText, setTemplateStylingText] = useState('');
-  const [autoRegenerate, setAutoRegenerate] = useState(false);
-  const [translations, setTranslations] = useState([]);
-  const [editingRow, setEditingRow] = useState(null);
-  const [newTranslationKey, setNewTranslationKey] = useState('');
-  const [newTranslationValue, setNewTranslationValue] = useState('');
-  const [editingMarketIndex, setEditingMarketIndex] = useState(null);
-  const [newMarketName, setNewMarketName] = useState('');
-  const [newMarketIdentifier, setNewMarketIdentifier] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [notification, setNotification] = useState({ message: '', type: '' });
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [payloadFilter, setPayloadFilter] = useState('');
-  const [continuationToken, setContinuationToken] = useState(null);
-  const [prevContinuationTokens, setPrevContinuationTokens] = useState([]);
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
-  const [status, setStatus] = useState('All');
-  const [generalSettingsTab, setGeneralSettingsTab] = useState(0);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [newCategoryIdentifier, setNewCategoryIdentifier] = useState('');
-  const [editingCategoryIndex, setEditingCategoryIndex] = useState(null);
+    // State Definitions
+    const [categories, setCategories] = useState([]);
+    const [markets, setMarkets] = useState([]);
+    const [history, setHistory] = useState([]);
+    const [activeView, setActiveView] = useState('none');
+    const [selectedTab, setSelectedTab] = useState(0);
+    const [selectedCategory, setSelectedCategory] = useState(null);
+    const [selectedMarket, setSelectedMarket] = useState(null);
+    const [templateLayoutText, setTemplateLayoutText] = useState('');
+    const [templateStylingText, setTemplateStylingText] = useState('');
+    const [autoRegenerate, setAutoRegenerate] = useState(false);
+    const [translations, setTranslations] = useState([]);
+    const [editingTranslationIndex, setEditingTranslationIndex] = useState(null);
+    const [newTranslationKey, setNewTranslationKey] = useState('');
+    const [newTranslationValue, setNewTranslationValue] = useState('');
+    const [editingMarketIndex, setEditingMarketIndex] = useState(null);
+    const [newMarketName, setNewMarketName] = useState('');
+    const [newMarketIdentifier, setNewMarketIdentifier] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [notification, setNotification] = useState({ message: '', type: '' });
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+    const [payloadFilter, setPayloadFilter] = useState('');
+    const [continuationToken, setContinuationToken] = useState(null);
+    const [prevContinuationTokens, setPrevContinuationTokens] = useState([]);
+    const [startDate, setStartDate] = useState(new Date());
+    const [endDate, setEndDate] = useState(new Date());
+    const [status, setStatus] = useState('All');
+    const [generalSettingsTab, setGeneralSettingsTab] = useState(0);
+    const [newCategoryName, setNewCategoryName] = useState('');
+    const [newCategoryIdentifier, setNewCategoryIdentifier] = useState('');
+    const [editingCategoryIndex, setEditingCategoryIndex] = useState(null);
 
-
-
-
-
-// Function to handle category updates
-const handleEditCategory = (index) => {
-  setEditingCategoryIndex(index);
-  setNewCategoryName(categories[index].name);
-  setNewCategoryIdentifier(categories[index].identifier);
-};
-
-// Function to save category updates
-const handleSaveCategory = async (index) => {
-  const updatedCategory = {
-    ...categories[index],
-    Name: newCategoryName,
-    Identifier: newCategoryIdentifier,
-  };
+    const [addingTranslation, setAddingTranslation] = useState(false);
   
-  try {
-    await apiClient.put('/configuration/categories', updatedCategory);
-    showNotification('Category updated successfully', 'success');
-    fetchCategories(); // Refresh categories after update
-  } catch (error) {
-    console.error('Error updating category:', error);
-    showNotification('Error updating category', 'error');
-  }
-
-  setEditingCategoryIndex(null); // Reset editing state
-};
-
-// Function to delete a category
-const handleDeleteCategory = async (index) => {
-  const categoryId = categories[index].Identifier;
-  
-  try {
-    await apiClient.delete(`/configuration/categories/${categoryId}`);
-    showNotification('Category deleted successfully', 'success');
-    fetchCategories(); // Refresh categories after deletion
-  } catch (error) {
-    console.error('Error deleting category:', error);
-    showNotification('Error deleting category', 'error');
-  }
-};
-
-
-
-  // Function to handle input change and auto-save
-  const handleTranslationChange = (index, field, value) => {
-    const updatedTranslations = [...translations];
-    updatedTranslations[index][field] = value;
-    setTranslations(updatedTranslations);
-  };
-
-  // Debounced save function to update translations state
-  const debouncedHandleTranslationChange = debounce(handleTranslationChange, 10);
-
-  // Show notification function
-  const showNotification = (message, type = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => {
-      setNotification({ message: '', type: '' });
-    }, 3000);
-  };
-
-  // Function to fetch categories from API
-  const fetchCategories = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await apiClient.get('/configuration/categories');
-      setCategories(response.data);
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-      showNotification('Error fetching categories', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Function to fetch markets based on selected category
-  const fetchMarkets = useCallback(async (categoryIdentifier) => {
-    if (!categoryIdentifier) return;
-    setLoading(true);
-    try {
-      const response = await apiClient.get(`/configuration/categories/${categoryIdentifier}/markets`);
-      setMarkets(response.data);
-    } catch (error) {
-      console.error('Error fetching markets:', error);
-      showNotification('Error fetching markets', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Function to fetch history with applied filters
-  const fetchHistory = useCallback(async (statusFilter, start, end, payloadFilter, pageSize) => {
-    setLoading(true);
-    try {
-      const params = {
-        from: start.toISOString(),
-        to: end.toISOString(),
-        pageSize,
-        status: statusFilter !== 'All' ? statusFilter : undefined,
-        payload: payloadFilter || undefined,
-      };
-      const response = await apiClient.get('/configuration/history', { params });
-      setHistory(response.data.histories);
-      setContinuationToken(response.data.continuationToken || null);
-    } catch (error) {
-      console.error('Error fetching history:', error);
-      showNotification('Error fetching history', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Function to handle clicking on a category
-  const handleCategoryClick = useCallback(
-    (category) => {
-      setActiveView('markets');
-      setSelectedCategory(category);
-      setSelectedMarket(null);
-      fetchMarkets(category.rowKey);
-    },
-    [fetchMarkets]
-  );
-
-  // Function to handle clicking on the general settings
-  const handleGeneralSettingsClick = () => {
-    setActiveView('settings');
-    setGeneralSettingsTab(0);
-  };
-
-  // Function to handle clicking on a market
-  const handleMarketClick = (market, index) => {
-    setSelectedTab(0); // Default to the first tab
-    setActiveView('details'); // Switch to details view
-    setSelectedMarket(market); // Set the selected market
-
-    // Safely parse settings and translations
-    let parsedSettings = {};
-    let parsedTranslations = [];
-
-    try {
-      if (market.settings && market.settings.trim().startsWith('{')) {
-        parsedSettings = JSON.parse(market.settings);
-      } else {
-        console.warn('Settings is not a valid JSON string:', market.settings);
-      }
-    } catch (error) {
-      console.error('Error parsing settings:', error);
-    }
-
-    try {
-      if (market.translations && market.translations.trim().startsWith('[')) {
-        parsedTranslations = JSON.parse(market.translations);
-      } else {
-        console.warn('Translations is not a valid JSON string:', market.translations);
-      }
-    } catch (error) {
-      console.error('Error parsing translations:', error);
-    }
-
-    setTemplateLayoutText(market.templateLayout || '');
-    setTemplateStylingText(market.styling || '');
-    setTranslations(parsedTranslations);
-    setAutoRegenerate(parsedSettings.allowAutoRegeneration || false);
-    setNewMarketName(market.name || ''); // Set market name
-    setNewMarketIdentifier(market.identifier || market.rowKey); // Set market identifier from either input or existing data
-    setEditingMarketIndex(index);
-  };
-
-  // Function to save market details for a category
-  const saveMarketForCategory = async (index) => {
-    if (index === null || index < 0 || index >= markets.length) {
-      console.error('Invalid market index:', index);
-      showNotification('An issue occurred while saving the market', 'error');
-      return;
-    }
-
-    const market = markets[index];
-    if (!market) {
-      showNotification('An issue occurred while saving the market', 'error');
-      console.error('Market not found at index:', index);
-      return;
-    }
-
-    // Ensure Name and Identifier are provided and not empty
-    const marketName = newMarketName.trim() || market.name;
-    const marketIdentifier = market.rowKey;
-
-    if (!marketName) {
-      console.error('Market Name is missing.');
-      showNotification('Market Name is required', 'error');
-      return;
-    }
-
-    if (!marketIdentifier) {
-      console.error('Market Identifier is missing.');
-      showNotification('Market Identifier is required', 'error');
-      return;
-    }
-
-    // Prepare updated market object
-    const updatedMarket = {
-      partitionKey: selectedCategory?.rowKey || market.partitionKey, // Ensure correct category ID is used
-      rowKey: marketIdentifier, // Use the Identifier as rowKey
-      Name: marketName,
-      Identifier: marketIdentifier,
-      TemplateLayout: templateLayoutText,
-      Styling: templateStylingText,
-      Translations: JSON.stringify(translations),
-      Settings: JSON.stringify({ allowAutoRegeneration: autoRegenerate }),
+    // Show notification function
+    const showNotification = (message, type = 'success') => {
+      setNotification({ message, type });
+      setTimeout(() => {
+        setNotification({ message: '', type: '' });
+      }, 3000);
     };
 
-    console.log(`Updating market for category ${selectedCategory?.rowKey}:`, updatedMarket);
 
-    try {
-      // Perform PUT request to update market
-      const response = await apiClient.put(
-        `/configuration/categories/${selectedCategory?.rowKey}/markets/${marketIdentifier}`,
-        updatedMarket
-      );
-      console.log('Market updated successfully:', response.data);
-      showNotification('Market updated successfully', 'success');
-
-      // Re-fetch markets after successfully saving the market
-      await fetchMarkets(selectedCategory?.rowKey);
-
-      // Alternatively, directly update the markets state without re-fetching
-      setMarkets((prevMarkets) => {
-        const updatedMarkets = [...prevMarkets];
-        updatedMarkets[index] = { ...market, ...updatedMarket };
-        setSelectedMarket(updatedMarkets[index]);
-        return updatedMarkets;
-      });
-    } catch (error) {
-      console.error('Error updating market:', error.message);
-
-      // Check for server validation errors
-      if (error.response && error.response.data.errors) {
-        console.error('Error details:', error.response.data.errors);
-
-        const identifierError = error.response.data.errors.Identifier?.[0];
-        if (identifierError) {
-          showNotification(identifierError, 'error');
-        }
-      } else {
-        showNotification('An issue occurred while updating the market', 'error');
-      }
-    }
-  };
-
-  // Function to add a new category with unique identifier check
-  const addCategory = async () => {
-    if (!newCategoryName || !newCategoryIdentifier) {
-      showNotification('Both name and identifier are required', 'error');
-      return;
-    }
-
-    // Check for unique identifier
-    if (categories.some((cat) => cat.rowKey === newCategoryIdentifier)) {
-      showNotification('Identifier must be unique', 'error');
-      return;
-    }
-
-    const newCategory = {
-      partitionKey: 'CategoryPartition', // or whatever your partition key is
-      Identifier:newCategoryIdentifier,
-      rowKey: newCategoryIdentifier,
-      Name: newCategoryName,
-    };
-
-    try {
-      await apiClient.post('/configuration/categories', newCategory);
-      showNotification('Category added successfully', 'success');
-      fetchCategories(); // Refresh the categories list
-    } catch (error) {
-      console.error('Error adding category:', error);
-      showNotification('An issue occurred while adding the category', 'error');
-    }
-  };
-
-  // Function to add a new market with unique identifier check
-  const addMarket = async () => {
-    if (!newMarketName || !newMarketIdentifier) {
-      showNotification('Both name and identifier are required', 'error');
-      return;
-    }
-
-    // Check for unique identifier
-    if (markets.some((mkt) => mkt.rowKey === newMarketIdentifier)) {
-      showNotification('Identifier must be unique', 'error');
-      return;
-    }
-
-    const newMarket = {
-      partitionKey: selectedCategory?.rowKey || 'MarketPartition', // or the relevant partition key
-      rowKey: newMarketIdentifier,
-      Name: newMarketName,
-      Identifier: newMarketIdentifier,
-    };
-
-    try {
-      await apiClient.post(`/configuration/categories/${selectedCategory?.rowKey}/markets`, newMarket);
-      showNotification('Market added successfully', 'success');
-      fetchMarkets(selectedCategory?.rowKey); // Refresh the markets list
-    } catch (error) {
-      console.error('Error adding market:', error);
-      showNotification('An issue occurred while adding the market', 'error');
-    }
-  };
-
-  // Function to add a new translation
-  const handleAddTranslation = () => {
-    setTranslations([...translations, { Key: '', Value: '' }]);
-    setEditingRow(translations.length);
-  };
-
-  // Function to save a translation after editing
-  const handleSaveTranslation = (index) => {
-    const updatedTranslations = [...translations];
-    updatedTranslations[index] = { Key: newTranslationKey, Value: newTranslationValue };
-    setTranslations(updatedTranslations);
-    setEditingRow(null);
-  };
-
-  // Function to start editing a translation
+      // Function to handle translation updates
   const handleEditTranslation = (index) => {
-    setEditingRow(index);
+    setEditingTranslationIndex(index);
     setNewTranslationKey(translations[index].Key);
     setNewTranslationValue(translations[index].Value);
+  };
+
+  // Function to save translation updates
+  const handleSaveTranslation = (index) => {
+    if (!newTranslationKey.trim()) {
+      showNotification('Translation Key cannot be empty', 'error');
+      return;
+    }
+
+    // Check for unique key
+    const isDuplicateKey = translations.some(
+      (translation, idx) => translation.Key === newTranslationKey && idx !== index
+    );
+    if (isDuplicateKey) {
+      showNotification('Translation Key must be unique', 'error');
+      return;
+    }
+
+    const updatedTranslations = [...translations];
+    updatedTranslations[index] = { Key: newTranslationKey, Value: newTranslationValue };
+
+    setTranslations(updatedTranslations);
+    setEditingTranslationIndex(null);
+    showNotification('Translation updated successfully', 'success');
   };
 
   // Function to delete a translation
@@ -380,22 +88,372 @@ const handleDeleteCategory = async (index) => {
     const updatedTranslations = [...translations];
     updatedTranslations.splice(index, 1);
     setTranslations(updatedTranslations);
+    showNotification('Translation deleted successfully', 'success');
   };
 
-  // Function to toggle the auto-regeneration switch
-  const handleToggleSwitch = () => {
-    setAutoRegenerate(!autoRegenerate);
+  // Function to add a new translation
+  const addTranslation = () => {
+    if (!newTranslationKey.trim() || !newTranslationValue.trim()) {
+      showNotification('Both key and value are required', 'error');
+      return;
+    }
+
+    // Check for unique key
+    const isDuplicateKey = translations.some((translation) => translation.Key === newTranslationKey);
+    if (isDuplicateKey) {
+      showNotification('Translation Key must be unique', 'error');
+      return;
+    }
+
+    setTranslations([...translations, { Key: newTranslationKey, Value: newTranslationValue }]);
+    setNewTranslationKey('');
+    setNewTranslationValue('');
+    setAddingTranslation(false);
+    showNotification('Translation added successfully', 'success');
   };
 
-  // Fetch categories on component mount
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
+  // Function to cancel adding a translation
+  const cancelAddTranslation = () => {
+    setAddingTranslation(false);
+    setNewTranslationKey('');
+    setNewTranslationValue('');
+  };
 
-  // Fetch history with applied filters
-  useEffect(() => {
-    fetchHistory(status, startDate, endDate, payloadFilter, itemsPerPage);
-  }, [fetchHistory, status, startDate, endDate, payloadFilter, currentPage, itemsPerPage]);
+  
+    // Function to handle category updates
+    const handleEditCategory = (index) => {
+      setEditingCategoryIndex(index);
+      setNewCategoryName(categories[index].name);
+      setNewCategoryIdentifier(categories[index].identifier);
+    };
+  
+    // Function to save category updates
+    const handleSaveCategory = async (index) => {
+      const updatedCategory = {
+        ...categories[index],
+        Name: newCategoryName,
+        Identifier: newCategoryIdentifier,
+      };
+  
+      try {
+        await apiClient.put('/configuration/categories', updatedCategory);
+        showNotification('Category updated successfully', 'success');
+        fetchCategories(); // Refresh categories after update
+      } catch (error) {
+        console.error('Error updating category:', error);
+        showNotification('Error updating category', 'error');
+      }
+  
+      setEditingCategoryIndex(null); // Reset editing state
+    };
+  
+    // Function to delete a category
+    const handleDeleteCategory = async (index) => {
+      const categoryId = categories[index].Identifier;
+  
+      try {
+        await apiClient.delete(`/configuration/categories/${categoryId}`);
+        showNotification('Category deleted successfully', 'success');
+        fetchCategories(); // Refresh categories after deletion
+      } catch (error) {
+        console.error('Error deleting category:', error);
+        showNotification('Error deleting category', 'error');
+      }
+    };
+  
+
+  
+    // Function to add a new translation
+    const handleAddTranslation = () => {
+      if (!newTranslationKey.trim()) {
+        showNotification('Translation Key cannot be empty', 'error');
+        return;
+      }
+  
+      // Check for unique key
+      const isDuplicateKey = translations.some((translation) => translation.Key === newTranslationKey);
+      if (isDuplicateKey) {
+        showNotification('Translation Key must be unique', 'error');
+        return;
+      }
+  
+      setTranslations([...translations, { Key: newTranslationKey, Value: newTranslationValue }]);
+      setEditingTranslationIndex(translations.length);
+      showNotification('Translation added successfully', 'success');
+    };
+  
+    // Function to handle input change and auto-save
+    const handleTranslationChange = (index, field, value) => {
+      const updatedTranslations = [...translations];
+      updatedTranslations[index][field] = value;
+      setTranslations(updatedTranslations);
+    };
+  
+    // Debounced save function to update translations state
+    const debouncedHandleTranslationChange = debounce(handleTranslationChange, 10);
+  
+    // Function to fetch categories from API
+    const fetchCategories = useCallback(async () => {
+      setLoading(true);
+      try {
+        const response = await apiClient.get('/configuration/categories');
+        setCategories(response.data);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        showNotification('Error fetching categories', 'error');
+      } finally {
+        setLoading(false);
+      }
+    }, []);
+  
+    // Function to fetch markets based on selected category
+    const fetchMarkets = useCallback(async (categoryIdentifier) => {
+      if (!categoryIdentifier) return;
+      setLoading(true);
+      try {
+        const response = await apiClient.get(`/configuration/categories/${categoryIdentifier}/markets`);
+        setMarkets(response.data);
+      } catch (error) {
+        console.error('Error fetching markets:', error);
+        showNotification('Error fetching markets', 'error');
+      } finally {
+        setLoading(false);
+      }
+    }, []);
+  
+    // Function to fetch history with applied filters
+    const fetchHistory = useCallback(async (statusFilter, start, end, payloadFilter, pageSize) => {
+      setLoading(true);
+      try {
+        const params = {
+          from: start.toISOString(),
+          to: end.toISOString(),
+          pageSize,
+          status: statusFilter !== 'All' ? statusFilter : undefined,
+          payload: payloadFilter || undefined,
+        };
+        const response = await apiClient.get('/configuration/history', { params });
+        setHistory(response.data.histories);
+        setContinuationToken(response.data.continuationToken || null);
+      } catch (error) {
+        console.error('Error fetching history:', error);
+        showNotification('Error fetching history', 'error');
+      } finally {
+        setLoading(false);
+      }
+    }, []);
+  
+    // Function to handle clicking on a category
+    const handleCategoryClick = useCallback(
+      (category) => {
+        setActiveView('markets');
+        setSelectedCategory(category);
+        setSelectedMarket(null);
+        fetchMarkets(category.rowKey);
+      },
+      [fetchMarkets]
+    );
+  
+    // Function to handle clicking on the general settings
+    const handleGeneralSettingsClick = () => {
+      setActiveView('settings');
+      setGeneralSettingsTab(0);
+    };
+  
+    // Function to handle clicking on a market
+    const handleMarketClick = (market, index) => {
+      setSelectedTab(0); // Default to the first tab
+      setActiveView('details'); // Switch to details view
+      setSelectedMarket(market); // Set the selected market
+  
+      // Safely parse settings and translations
+      let parsedSettings = {};
+      let parsedTranslations = [];
+  
+      try {
+        if (market.settings && market.settings.trim().startsWith('{')) {
+          parsedSettings = JSON.parse(market.settings);
+        } else {
+          console.warn('Settings is not a valid JSON string:', market.settings);
+        }
+      } catch (error) {
+        console.error('Error parsing settings:', error);
+      }
+  
+      try {
+        if (market.translations && market.translations.trim().startsWith('[')) {
+          parsedTranslations = JSON.parse(market.translations);
+        } else {
+          console.warn('Translations is not a valid JSON string:', market.translations);
+        }
+      } catch (error) {
+        console.error('Error parsing translations:', error);
+      }
+  
+      setTemplateLayoutText(market.templateLayout || '');
+      setTemplateStylingText(market.styling || '');
+      setTranslations(parsedTranslations);
+      setAutoRegenerate(parsedSettings.allowAutoRegeneration || false);
+      setNewMarketName(market.name || ''); // Set market name
+      setNewMarketIdentifier(market.identifier || market.rowKey); // Set market identifier from either input or existing data
+      setEditingMarketIndex(index);
+    };
+  
+    // Function to save market details for a category
+    const saveMarketForCategory = async (index) => {
+      if (index === null || index < 0 || index >= markets.length) {
+        console.error('Invalid market index:', index);
+        showNotification('An issue occurred while saving the market', 'error');
+        return;
+      }
+  
+      const market = markets[index];
+      if (!market) {
+        showNotification('An issue occurred while saving the market', 'error');
+        console.error('Market not found at index:', index);
+        return;
+      }
+  
+      // Ensure Name and Identifier are provided and not empty
+      const marketName = newMarketName.trim() || market.name;
+      const marketIdentifier = market.rowKey;
+  
+      if (!marketName) {
+        console.error('Market Name is missing.');
+        showNotification('Market Name is required', 'error');
+        return;
+      }
+  
+      if (!marketIdentifier) {
+        console.error('Market Identifier is missing.');
+        showNotification('Market Identifier is required', 'error');
+        return;
+      }
+  
+      // Prepare updated market object
+      const updatedMarket = {
+        partitionKey: selectedCategory?.rowKey || market.partitionKey, // Ensure correct category ID is used
+        rowKey: marketIdentifier, // Use the Identifier as rowKey
+        Name: marketName,
+        Identifier: marketIdentifier,
+        TemplateLayout: templateLayoutText,
+        Styling: templateStylingText,
+        Translations: JSON.stringify(translations),
+        Settings: JSON.stringify({ allowAutoRegeneration: autoRegenerate }),
+      };
+  
+      console.log(`Updating market for category ${selectedCategory?.rowKey}:`, updatedMarket);
+  
+      try {
+        // Perform PUT request to update market
+        const response = await apiClient.put(
+          `/configuration/categories/${selectedCategory?.rowKey}/markets/${marketIdentifier}`,
+          updatedMarket
+        );
+        console.log('Market updated successfully:', response.data);
+        showNotification('Market updated successfully', 'success');
+  
+        // Re-fetch markets after successfully saving the market
+        await fetchMarkets(selectedCategory?.rowKey);
+  
+        // Alternatively, directly update the markets state without re-fetching
+        setMarkets((prevMarkets) => {
+          const updatedMarkets = [...prevMarkets];
+          updatedMarkets[index] = { ...market, ...updatedMarket };
+          setSelectedMarket(updatedMarkets[index]);
+          return updatedMarkets;
+        });
+      } catch (error) {
+        console.error('Error updating market:', error.message);
+  
+        // Check for server validation errors
+        if (error.response && error.response.data.errors) {
+          console.error('Error details:', error.response.data.errors);
+  
+          const identifierError = error.response.data.errors.Identifier?.[0];
+          if (identifierError) {
+            showNotification(identifierError, 'error');
+          }
+        } else {
+          showNotification('An issue occurred while updating the market', 'error');
+        }
+      }
+    };
+  
+    // Function to add a new category with unique identifier check
+    const addCategory = async () => {
+      if (!newCategoryName || !newCategoryIdentifier) {
+        showNotification('Both name and identifier are required', 'error');
+        return;
+      }
+  
+      // Check for unique identifier
+      if (categories.some((cat) => cat.rowKey === newCategoryIdentifier)) {
+        showNotification('Identifier must be unique', 'error');
+        return;
+      }
+  
+      const newCategory = {
+        partitionKey: 'CategoryPartition', // or whatever your partition key is
+        Identifier: newCategoryIdentifier,
+        rowKey: newCategoryIdentifier,
+        Name: newCategoryName,
+      };
+  
+      try {
+        await apiClient.post('/configuration/categories', newCategory);
+        showNotification('Category added successfully', 'success');
+        fetchCategories(); // Refresh the categories list
+      } catch (error) {
+        console.error('Error adding category:', error);
+        showNotification('An issue occurred while adding the category', 'error');
+      }
+    };
+  
+    // Function to add a new market with unique identifier check
+    const addMarket = async () => {
+      if (!newMarketName || !newMarketIdentifier) {
+        showNotification('Both name and identifier are required', 'error');
+        return;
+      }
+  
+      // Check for unique identifier
+      if (markets.some((mkt) => mkt.rowKey === newMarketIdentifier)) {
+        showNotification('Identifier must be unique', 'error');
+        return;
+      }
+  
+      const newMarket = {
+        partitionKey: selectedCategory?.rowKey || 'MarketPartition', // or the relevant partition key
+        rowKey: newMarketIdentifier,
+        Name: newMarketName,
+        Identifier: newMarketIdentifier,
+      };
+  
+      try {
+        await apiClient.post(`/configuration/categories/${selectedCategory?.rowKey}/markets`, newMarket);
+        showNotification('Market added successfully', 'success');
+        fetchMarkets(selectedCategory?.rowKey); // Refresh the markets list
+      } catch (error) {
+        console.error('Error adding market:', error);
+        showNotification('An issue occurred while adding the market', 'error');
+      }
+    };
+  
+    // Function to toggle the auto-regeneration switch
+    const handleToggleSwitch = () => {
+      setAutoRegenerate(!autoRegenerate);
+    };
+  
+    // Fetch categories on component mount
+    useEffect(() => {
+      fetchCategories();
+    }, [fetchCategories]);
+  
+    // Fetch history with applied filters
+    useEffect(() => {
+      fetchHistory(status, startDate, endDate, payloadFilter, itemsPerPage);
+    }, [fetchHistory, status, startDate, endDate, payloadFilter, currentPage, itemsPerPage]);
 
   return (
     <div className="App">
@@ -666,39 +724,39 @@ const handleDeleteCategory = async (index) => {
         
                       {categories.map((category, index) => (
         <li key={`${category.partitionKey}-${category.rowKey}`} className="flex items-center justify-between p-2 border rounded">
-          {editingCategoryIndex === index ? (
-            <>
-              <input
-                type="text"
-                value={newCategoryName}
-                onChange={(e) => setNewCategoryName(e.target.value)}
-                className="border border-gray-300 rounded p-1 flex-grow"
-              />
-              <input
-                type="text"
-                value={newCategoryIdentifier}
-                onChange={(e) => setNewCategoryIdentifier(e.target.value)}
-                className="border border-gray-300 rounded p-1 flex-grow"
-              />
-              <button onClick={() => handleSaveCategory(index)} className="text-green-500 ml-2">
-                Save
-              </button>
-            </>
-          ) : (
-            <>
-              <span>{category.name}</span>
-              <div className="flex items-center space-x-2">
-                <button onClick={() => handleEditCategory(index)} className="text-blue-500">
-                  <FontAwesomeIcon icon={faEdit} />
-                </button>
-                <button onClick={() => handleDeleteCategory(index)} className="text-red-500">
-                  <FontAwesomeIcon icon={faTrash} />
-                </button>
-              </div>
-            </>
-          )}
-        </li>
-      ))}
+                            {editingCategoryIndex === index ? (
+                              <>
+                                <input
+                                  type="text"
+                                  value={newCategoryName}
+                                  onChange={(e) => setNewCategoryName(e.target.value)}
+                                  className="border border-gray-300 rounded p-1 flex-grow"
+                                />
+                                <input
+                                  type="text"
+                                  value={newCategoryIdentifier}
+                                  onChange={(e) => setNewCategoryIdentifier(e.target.value)}
+                                  className="border border-gray-300 rounded p-1 flex-grow"
+                                />
+                                <button onClick={() => handleSaveCategory(index)} className="text-green-500 ml-2">
+                                  Save
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <span>{category.name}</span>
+                                <div className="flex items-center space-x-2">
+                                  <button onClick={() => handleEditCategory(index)} className="text-blue-500">
+                                    <FontAwesomeIcon icon={faEdit} />
+                                  </button>
+                                  <button onClick={() => handleDeleteCategory(index)} className="text-red-500">
+                                    <FontAwesomeIcon icon={faTrash} />
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </li>
+                        ))}
 
 
           </ul>
@@ -709,33 +767,8 @@ const handleDeleteCategory = async (index) => {
                     </div>
                   )}
                   {/* Markets Tab */}
-                  {generalSettingsTab === 5 && (
-                    <div className="mt-4">
-                      <h3 className="text-md font-semibold mb-2">Markets</h3>
-                      <div className="flex space-x-2 mb-4">
-                        <input
-                          type="text"
-                          value={newMarketName}
-                          onChange={(e) => setNewMarketName(e.target.value)}
-                          placeholder="Market Name"
-                          className="flex-grow border border-gray-300 rounded p-2"
-                        />
-                        <input
-                          type="text"
-                          value={newMarketIdentifier}
-                          onChange={(e) => setNewMarketIdentifier(e.target.value)}
-                          placeholder="Identifier"
-                          className="flex-grow border border-gray-300 rounded p-2"
-                        />
-                        <button
-                          className="bg-blue-500 text-white px-4 py-2 rounded"
-                          onClick={addMarket}
-                        >
-                          Add Market
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  {/* Translations */}
+                  
                 </div>
               </div>
             )}
@@ -831,70 +864,82 @@ const handleDeleteCategory = async (index) => {
 
                   {selectedTab === 2 && (
                     <div className="mt-4">
-                      <button
-                        className="bg-blue-500 text-white px-4 py-2 rounded mb-4"
-                        onClick={handleAddTranslation}
-                      >
-                        + Add Translation
-                      </button>
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Key
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Translation
-                            </th>
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Action
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {Array.isArray(translations) &&
-                            translations.map((translation, index) => (
-                              <tr key={`${translation.Key}-${index}`}>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <input
-                                    type="text"
-                                    value={translation.Key}
-                                    onChange={(e) =>
-                                      debouncedHandleTranslationChange(index, 'Key', e.target.value)
-                                    }
-                                    className="border border-gray-300 rounded p-2"
-                                  />
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <input
-                                    type="text"
-                                    value={translation.Value}
-                                    onChange={(e) =>
-                                      debouncedHandleTranslationChange(index, 'Value', e.target.value)
-                                    }
-                                    className="border border-gray-300 rounded p-2"
-                                  />
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap flex items-center space-x-2 justify-center">
-                                  <button
-                                    onClick={() => handleDeleteTranslation(index)}
-                                    className="text-red-500 hover:text-red-700 flex items-center justify-center"
-                                    style={{
-                                      background: 'none',
-                                      border: 'none',
-                                      padding: 0,
-                                      cursor: 'pointer',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                    }}
-                                  >
-                                    <FontAwesomeIcon icon={faTrash} />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                        </tbody>
-                      </table>
+                      {selectedTab === 2 && (
+                                        <div className="mt-4">
+                                            <h3 className="text-md font-semibold mb-2">Translations</h3>
+                                            <div className="flex space-x-2 mb-4">
+                                                <input
+                                                    type="text"
+                                                    value={newTranslationKey}
+                                                    onChange={(e) => setNewTranslationKey(e.target.value)}
+                                                    placeholder="Translation Key"
+                                                    className="flex-grow border border-gray-300 rounded p-2"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={newTranslationValue}
+                                                    onChange={(e) => setNewTranslationValue(e.target.value)}
+                                                    placeholder="Translation Value"
+                                                    className="flex-grow border border-gray-300 rounded p-2"
+                                                />
+                                                <button
+                                                    className="bg-blue-500 text-white px-4 py-2 rounded"
+                                                    onClick={addTranslation}
+                                                >
+                                                    Add Translationss
+                                                </button>
+                                            </div>
+                                            <ul className="space-y-2">
+                                                {translations.map((translation, index) => (
+                                                    <li
+                                                        key={`${translation.Key}-${index}`}
+                                                        className="flex items-center justify-between p-2 border rounded"
+                                                    >
+                                                        {editingTranslationIndex === index ? (
+                                                            <>
+                                                                <input
+                                                                    type="text"
+                                                                    value={newTranslationKey}
+                                                                    onChange={(e) => setNewTranslationKey(e.target.value)}
+                                                                    className="border border-gray-300 rounded p-1 flex-grow"
+                                                                />
+                                                                <input
+                                                                    type="text"
+                                                                    value={newTranslationValue}
+                                                                    onChange={(e) => setNewTranslationValue(e.target.value)}
+                                                                    className="border border-gray-300 rounded p-1 flex-grow"
+                                                                />
+                                                                <button
+                                                                    onClick={() => handleSaveTranslation(index)}
+                                                                    className="text-green-500 ml-2"
+                                                                >
+                                                                    Save
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <span>{translation.Key} - {translation.Value}</span>
+                                                                <div className="flex items-center space-x-2">
+                                                                    <button
+                                                                        onClick={() => handleEditTranslation(index)}
+                                                                        className="text-blue-500"
+                                                                    >
+                                                                        <FontAwesomeIcon icon={faEdit} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDeleteTranslation(index)}
+                                                                        className="text-red-500"
+                                                                    >
+                                                                        <FontAwesomeIcon icon={faTrash} />
+                                                                    </button>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
                     </div>
                   )}
 
