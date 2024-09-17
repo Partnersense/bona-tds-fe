@@ -800,9 +800,9 @@ const handleAddMarket = () => {
                           <tbody className="bg-white divide-y divide-gray-200">
                             {history.map((item) => (
                               <tr key={`${item.partitionKey}-${item.rowKey}`}>
-                                <td className="px-6 py-4 whitespace-nowrap">{item.Status}</td>
-                                <td className="px-6 py-4 whitespace-nowrap">{item.Payload}</td>
-                                <td className="px-6 py-4 whitespace-nowrap">{new Date(item.Timestamp).toLocaleString()}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">{item.status}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">{item.payload}</td>
+                                <td className="px-6 py-4 whitespace-nowrap">{new Date(item.timestamp).toLocaleString()}</td>
                               </tr>
                             ))}
                           </tbody>
