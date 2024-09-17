@@ -6,6 +6,32 @@
     min-height: 800px;
 }
 
+
+@keyframes pulse {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.2);
+      opacity: 0.5;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+  
+  .pulse-blue {
+    animation: pulse 2s infinite;
+    color: #3b82f6; /* Tailwind Blue 500 */
+  }
+  
+  .pulse-green {
+    animation: pulse 2s infinite;
+    color: #10b981; /* Tailwind Green 500 */
+  }
+
 button {
     display: inline-flex;
     align-items: center;
@@ -67,4 +93,22 @@ button:hover .faEdit, button:hover .faTrash {
     justify-content: center;
     align-items: center;
     height: 100vh; /* Full height to center vertically */
+  }
+
+  .status-icon {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%; /* Ensures the icon takes the full height of the cell */
+  }
+
+  .centered-error {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* Full height to center vertically */
+    text-align: center;
+    font-size: 2rem; /* Larger font size */
+    color: #ff0000; /* Optional: Change text color to red */
+    font-weight: bold; /* Optional: Make the text bold */
   }

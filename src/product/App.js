@@ -133,16 +133,33 @@ const App = () => {
     }
   }, [selectedItem, fetchVersions, fetchTodaysPreviews, fetchJobsForAllMarkets]);
 
-  // Render POST request function
-  const handleRender = async (isPreview = false) => {
-    try {
-      await apiClient.post('/render', { preview: isPreview, market: selectedMarket });
-      showNotification(isPreview ? 'Preview job created' : 'Render job created', 'success');
-    } catch (error) {
-      console.error('Error creating render job:', error);
-      showNotification('Error creating render job', 'error');
+
+// Function to handle the Render and Preview actions
+const handleRender = async (isPreview = false) => {
+  try {
+    // Determine the type based on whether it's a preview or a full render
+    const type = isPreview ? 'preview' : 'master';
+
+    // Check if a market is selected
+    if (!selectedMarket) {
+      showNotification('Please select a market', 'error');
+      return;
     }
-  };
+
+    // Construct the endpoint URL
+    const endpoint = `/job/register/${selectedMarket}/${type}/${itemId}`;
+
+    // Perform the POST request
+    await apiClient.post(endpoint);
+
+    // Show a success notification
+    showNotification(isPreview ? 'Preview job created' : 'Render job created', 'success');
+  } catch (error) {
+    // Handle errors
+    console.error('Error creating render job:', error);
+    showNotification('Error creating render job', 'error');
+  }
+};
 
   // Handle clicking on sidebar items
   const handleItemClick = (item) => {
@@ -170,26 +187,34 @@ const App = () => {
     return <p>Loading...</p>;
   }
 
-  // Display message if category is not valid
-  if (!isCategoryValid) {
-    return <p>The current category for this product is not supported.</p>;
-  }
 
-  // Render job status icon based on job status
-  const renderJobStatusIcon = (status) => {
-    switch (status) {
-      case 'Processing':
-        return <FontAwesomeIcon icon={faSpinner} spin className="text-yellow-500" />;
-      case 'Completed':
-        return <FontAwesomeIcon icon={faCircle} className="text-green-500" />;
-      case 'Registered':
-        return <FontAwesomeIcon icon={faCircle} className="text-blue-500" />;
-      case 'Failed':
-        return <FontAwesomeIcon icon={faCircle} className="text-red-500" />;
-      default:
-        return null;
-    }
-  };
+// Display message if category is not valid
+if (!isCategoryValid) {
+  return (
+    <div className="centered-error">
+      The current category for this product is not supported.
+    </div>
+  );
+}
+
+
+// Render job status icon based on job status with pulsing effect
+const renderJobStatusIcon = (status) => {
+  switch (status) {
+    case 'Processing':
+      return <FontAwesomeIcon icon={faSpinner} spin className="text-yellow-500" />;
+    case 'Completed':
+      return <FontAwesomeIcon icon={faCircle} className="pulse-green" />; // Green dot with pulse
+    case 'Registered':
+      return <FontAwesomeIcon icon={faCircle} className="pulse-blue" />; // Blue dot with pulse
+    case 'Queued':
+      return <FontAwesomeIcon icon={faCircle} className="pulse-blue" />; // Blue dot with pulse
+    case 'Failed':
+      return <FontAwesomeIcon icon={faCircle} className="text-red-500" />;
+    default:
+      return null;
+  }
+};
 
   return (
     <div className="App">
@@ -234,15 +259,15 @@ const App = () => {
               <h2 className="text-lg font-semibold mb-4">Render TDS</h2>
               <button
                 className="bg-green-500 text-white px-4 py-2 rounded mr-2"
-                onClick={() => handleRender(false)}
-                disabled={!selectedMarket}
+                onClick={() => handleRender(false)} // Calls handleRender with false for rendering
+                disabled={!selectedMarket} // Disable if no market is selected
               >
                 Render
               </button>
               <button
                 className="bg-blue-500 text-white px-4 py-2 rounded"
-                onClick={() => handleRender(true)}
-                disabled={!selectedMarket}
+                onClick={() => handleRender(true)} // Calls handleRender with true for previewing
+                disabled={!selectedMarket} // Disable if no market is selected
               >
                 Preview
               </button>
