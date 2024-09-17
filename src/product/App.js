@@ -29,33 +29,50 @@ const App = () => {
   };
 
 
-    // Define handleRender function
-    const handleRender = async (isPreview = false) => {
-      try {
-        // Determine the type based on whether it's a preview or a full render
-        const type = isPreview ? 'preview' : 'master';
-  
-        // Check if a market is selected
-        if (!selectedMarket) {
-          showNotification('Please select a market', 'error');
-          return;
-        }
-  
-        // Construct the endpoint URL
-        const endpoint = `/job/register/${selectedMarket}/${type}/${itemId}`;
-  
-        // Perform the POST request
-        await apiClient.post(endpoint);
-  
-        // Show a success notification
-        showNotification(isPreview ? 'Preview job created' : 'Render job created', 'success');
-      } catch (error) {
-        // Handle errors
-        console.error('Error creating render job:', error);
-        showNotification('Error creating render job', 'error');
-      }
+// Define handleRender function
+const handleRender = async (isPreview = false) => {
+  try {
+    // Determine the type based on whether it's a preview or a full render
+    const type = isPreview ? 'preview' : 'master';
+
+    // Check if a market is selected
+    if (!selectedMarket) {
+      showNotification('Please select a market', 'error');
+      return;
+    }
+
+    // Construct the endpoint URL for the main API
+    const endpoint = `/job/register/${selectedMarket}/${type}/${itemId}`;
+
+    // Define the payload
+    const payload = {
+      market: selectedMarket,
+      type,
+      itemId,
     };
-    
+
+    // Perform the first API request to "inriverextension"
+    const inriverExtensionEndpoint = `/job/simulate/${selectedMarket}/${type}/${itemId}`;
+    const headers = {
+      'Content-Type': 'text/plain',
+      // Add any other headers needed, e.g., authorization
+    };
+    await apiClient.post(inriverExtensionEndpoint, payload, { headers });
+    console.log("Sending request to inRiver");
+
+    // Perform the main API request
+    await apiClient.post(endpoint, payload, { headers });
+    console.log("Sending request to Job API");
+
+    // Show a success notification
+    showNotification(isPreview ? 'Preview job created' : 'Render job created', 'success');
+  } catch (error) {
+    // Handle errors
+    console.error('Error creating render job:', error);
+    showNotification('Error creating render job', 'error');
+  }
+};
+
   // Fetch all unique markets
   const fetchAllMarkets = useCallback(async () => {
     try {
@@ -128,23 +145,25 @@ const App = () => {
   }, [itemId]);
 
   // Fetch data when the application loads
-  useEffect(() => {
-    fetchAllMarkets();
-    checkCategoryValidity();
-    fetchJobsForAllMarkets(); // Fetch queues immediately on load
-    fetchVersions();
-    fetchTodaysPreviews();
+useEffect(() => {
+  fetchAllMarkets();
+  checkCategoryValidity();
+  fetchJobsForAllMarkets(); // Fetch queues immediately on load
+  fetchVersions();
+  fetchTodaysPreviews();
 
-    // Set up polling for jobs
-    const jobsInterval = setInterval(() => {
-      fetchJobsForAllMarkets();
-    }, 5000); // Fetch jobs every 5 seconds
+  // Set up polling for jobs, versions, and previews
+  const interval = setInterval(() => {
+    fetchJobsForAllMarkets();   // Poll jobs
+    fetchVersions();            // Poll versions
+    fetchTodaysPreviews();      // Poll previews
+  }, 5000); // Poll every 5 seconds
 
-    // Clean up intervals on component unmount or change
-    return () => {
-      clearInterval(jobsInterval);
-    };
-  }, [fetchAllMarkets, checkCategoryValidity, fetchJobsForAllMarkets, fetchVersions, fetchTodaysPreviews]);
+  // Clean up intervals on component unmount or change
+  return () => {
+    clearInterval(interval);
+  };
+}, [fetchAllMarkets, checkCategoryValidity, fetchJobsForAllMarkets, fetchVersions, fetchTodaysPreviews]);
 
   // Handle clicking on sidebar items
   const handleItemClick = (item) => {
