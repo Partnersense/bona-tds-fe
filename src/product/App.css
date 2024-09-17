@@ -7,29 +7,48 @@
 }
 
 
-@keyframes pulse {
+
+ /* Pulsating Blue */
+.pulse-blue {
+    color: #3b82f6; /* Tailwind blue-500 */
+    animation: pulse 2s infinite;
+  }
+  
+  /* Pulsating Green */
+  .pulse-green {
+    color: #dcaa14; /* Tailwind green-500 */
+    animation: pulse 2s infinite;
+  }
+  
+  /* Static Green */
+  .static-green {
+    color: #10b981; /* Tailwind green-500 */
+  }
+  
+  /* Static Red */
+  .static-red {
+    color: #ef4444; /* Tailwind red-500 */
+  }
+  
+  /* Static Grey */
+  .static-grey {
+    color: #9ca3af; /* Tailwind gray-500 */
+  }
+  
+  /* Keyframes for Pulsing Animation */
+  @keyframes pulse {
     0% {
       transform: scale(1);
       opacity: 1;
     }
     50% {
-      transform: scale(1.2);
-      opacity: 0.5;
+      transform: scale(1.1);
+      opacity: 0.7;
     }
     100% {
       transform: scale(1);
       opacity: 1;
     }
-  }
-  
-  .pulse-blue {
-    animation: pulse 2s infinite;
-    color: #3b82f6; /* Tailwind Blue 500 */
-  }
-  
-  .pulse-green {
-    animation: pulse 2s infinite;
-    color: #10b981; /* Tailwind Green 500 */
   }
 
 button {
@@ -111,4 +130,43 @@ button:hover .faEdit, button:hover .faTrash {
     font-size: 2rem; /* Larger font size */
     color: #ff0000; /* Optional: Change text color to red */
     font-weight: bold; /* Optional: Make the text bold */
+  }
+
+  .centered-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* Full viewport height */
+  }
+  
+  .large-spinner {
+    font-size: 3rem; /* Adjust size as needed */
+    color: #000; /* Optional: change spinner color */
+  }
+
+  /* App.css */
+
+.table {
+    width: 100%;
+    table-layout: fixed; /* Fix the table layout */
+  }
+  
+  .col-file-name {
+    width: 40%; /* Adjust the width as needed */
+  }
+  
+  .col-market {
+    width: 20%;
+  }
+  
+  .col-timestamp {
+    width: 30%;
+  }
+  
+  .col-download {
+    width: 10%; /* Ensure 'Download' is consistently positioned */
+  }
+  
+  .text-right {
+    text-align: right;
   }

@@ -28,6 +28,34 @@ const App = () => {
     }, 3000);
   };
 
+
+    // Define handleRender function
+    const handleRender = async (isPreview = false) => {
+      try {
+        // Determine the type based on whether it's a preview or a full render
+        const type = isPreview ? 'preview' : 'master';
+  
+        // Check if a market is selected
+        if (!selectedMarket) {
+          showNotification('Please select a market', 'error');
+          return;
+        }
+  
+        // Construct the endpoint URL
+        const endpoint = `/job/register/${selectedMarket}/${type}/${itemId}`;
+  
+        // Perform the POST request
+        await apiClient.post(endpoint);
+  
+        // Show a success notification
+        showNotification(isPreview ? 'Preview job created' : 'Render job created', 'success');
+      } catch (error) {
+        // Handle errors
+        console.error('Error creating render job:', error);
+        showNotification('Error creating render job', 'error');
+      }
+    };
+    
   // Fetch all unique markets
   const fetchAllMarkets = useCallback(async () => {
     try {
@@ -49,7 +77,7 @@ const App = () => {
     }
   }, [itemId]);
 
-  // Fetch today's versions and previews
+  // Fetch today's versions
   const fetchTodaysVersions = useCallback((versionsData = versions) => {
     const today = new Date().toISOString().slice(0, 10);
     const filteredVersions = versionsData.filter((version) => version.timestamp.startsWith(today));
@@ -99,67 +127,24 @@ const App = () => {
     }
   }, [itemId]);
 
+  // Fetch data when the application loads
   useEffect(() => {
     fetchAllMarkets();
     checkCategoryValidity();
-  }, [fetchAllMarkets, checkCategoryValidity]);
+    fetchJobsForAllMarkets(); // Fetch queues immediately on load
+    fetchVersions();
+    fetchTodaysPreviews();
 
-  useEffect(() => {
-    if (selectedItem === 'Render TDS') {
-      fetchVersions(); // Initial fetch of versions
-      fetchTodaysPreviews(); // Initial fetch of previews
+    // Set up polling for jobs
+    const jobsInterval = setInterval(() => {
+      fetchJobsForAllMarkets();
+    }, 5000); // Fetch jobs every 5 seconds
 
-      // Set up polling for versions
-      const versionsInterval = setInterval(() => {
-        fetchVersions();
-      }, 5000); // Fetch versions every 5 seconds
-
-      // Set up polling for previews
-      const previewsInterval = setInterval(() => {
-        fetchTodaysPreviews();
-      }, 5000); // Fetch previews every 5 seconds
-
-      // Set up polling for jobs
-      const jobsInterval = setInterval(() => {
-        fetchJobsForAllMarkets();
-      }, 5000); // Fetch jobs every 5 seconds
-
-      // Clean up intervals on component unmount or change
-      return () => {
-        clearInterval(versionsInterval);
-        clearInterval(previewsInterval);
-        clearInterval(jobsInterval);
-      };
-    }
-  }, [selectedItem, fetchVersions, fetchTodaysPreviews, fetchJobsForAllMarkets]);
-
-
-// Function to handle the Render and Preview actions
-const handleRender = async (isPreview = false) => {
-  try {
-    // Determine the type based on whether it's a preview or a full render
-    const type = isPreview ? 'preview' : 'master';
-
-    // Check if a market is selected
-    if (!selectedMarket) {
-      showNotification('Please select a market', 'error');
-      return;
-    }
-
-    // Construct the endpoint URL
-    const endpoint = `/job/register/${selectedMarket}/${type}/${itemId}`;
-
-    // Perform the POST request
-    await apiClient.post(endpoint);
-
-    // Show a success notification
-    showNotification(isPreview ? 'Preview job created' : 'Render job created', 'success');
-  } catch (error) {
-    // Handle errors
-    console.error('Error creating render job:', error);
-    showNotification('Error creating render job', 'error');
-  }
-};
+    // Clean up intervals on component unmount or change
+    return () => {
+      clearInterval(jobsInterval);
+    };
+  }, [fetchAllMarkets, checkCategoryValidity, fetchJobsForAllMarkets, fetchVersions, fetchTodaysPreviews]);
 
   // Handle clicking on sidebar items
   const handleItemClick = (item) => {
@@ -187,32 +172,29 @@ const handleRender = async (isPreview = false) => {
     return <p>Loading...</p>;
   }
 
-
-// Display message if category is not valid
-if (!isCategoryValid) {
-  return (
-    <div className="centered-error">
-      The current category for this product is not supported.
-    </div>
-  );
-}
-
-
+  // Display message if category is not valid
+  if (!isCategoryValid) {
+    return (
+      <div className="centered-error">
+        The current category for this product is not supported.
+      </div>
+    );
+  }
 // Render job status icon based on job status with pulsing effect
 const renderJobStatusIcon = (status) => {
   switch (status) {
     case 'Processing':
-      return <FontAwesomeIcon icon={faSpinner} spin className="text-yellow-500" />;
-    case 'Completed':
       return <FontAwesomeIcon icon={faCircle} className="pulse-green" />; // Green dot with pulse
+    case 'Completed':
+      return <FontAwesomeIcon icon={faCircle} className="text-green-500" />; // Static green dot
     case 'Registered':
-      return <FontAwesomeIcon icon={faCircle} className="pulse-blue" />; // Blue dot with pulse
+      return <FontAwesomeIcon icon={faCircle} className="text-gray-500" />; // Static grey dot
     case 'Queued':
       return <FontAwesomeIcon icon={faCircle} className="pulse-blue" />; // Blue dot with pulse
     case 'Failed':
-      return <FontAwesomeIcon icon={faCircle} className="text-red-500" />;
+      return <FontAwesomeIcon icon={faCircle} className="text-red-500" />; // Static red dot
     default:
-      return null;
+      return <FontAwesomeIcon icon={faCircle} className="text-gray-500" />; // Static grey dot
   }
 };
 
@@ -238,7 +220,7 @@ const renderJobStatusIcon = (status) => {
         <div className="bg-white shadow-md rounded-lg p-4 col-span-2">
           <h2 className="text-lg font-semibold mb-4">Menu</h2>
           <ul className="space-y-2">
-            {['Render TDS', 'Changes', 'Versions', 'Settings'].map((item) => (
+            {['Create TDS', 'Changes', 'Versions', 'Settings'].map((item) => (
               <li
                 key={item}
                 onClick={() => handleItemClick(item)}
@@ -254,22 +236,22 @@ const renderJobStatusIcon = (status) => {
 
         {/* Second Pane */}
         <div className="bg-white shadow-md rounded-lg p-4 col-span-10">
-          {selectedItem === 'Render TDS' && (
+          {selectedItem === 'Create TDS' && (
             <div>
-              <h2 className="text-lg font-semibold mb-4">Render TDS</h2>
+              <h2 className="text-lg font-semibold mb-4">Create TDS</h2>
               <button
                 className="bg-green-500 text-white px-4 py-2 rounded mr-2"
                 onClick={() => handleRender(false)} // Calls handleRender with false for rendering
                 disabled={!selectedMarket} // Disable if no market is selected
               >
-                Render
+                Render new TDS
               </button>
               <button
                 className="bg-blue-500 text-white px-4 py-2 rounded"
                 onClick={() => handleRender(true)} // Calls handleRender with true for previewing
                 disabled={!selectedMarket} // Disable if no market is selected
               >
-                Preview
+                Preview new TDS
               </button>
 
               <div className="mt-4">
