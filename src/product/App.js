@@ -29,49 +29,56 @@ const App = () => {
   };
 
 
-// Define handleRender function
-const handleRender = async (isPreview = false) => {
-  try {
-    // Determine the type based on whether it's a preview or a full render
-    const type = isPreview ? 'preview' : 'master';
-
-    // Check if a market is selected
-    if (!selectedMarket) {
-      showNotification('Please select a market', 'error');
-      return;
+  const handleRender = async (isPreview = false) => {
+    try {
+      // Determine the type based on whether it's a preview or a full render
+      const type = isPreview ? 'preview' : 'master';
+  
+      // Check if a market is selected
+      if (!selectedMarket) {
+        showNotification('Please select a market', 'error');
+        return;
+      }
+  
+      // Construct the endpoint URL for the inriverextension
+      const inriverExtensionEndpoint = `/job/simulate/${selectedMarket}/${type}/${itemId}`;
+  
+      // Create the TdsRequest object as a payload
+      const payload = {
+        EntityId: itemId,
+        Market: selectedMarket,
+        Category: currentCategory,
+        Type: type
+      };
+  
+      // Convert the payload to a string since server expects `text/plain`
+      const payloadString = JSON.stringify(payload);
+  
+      // Headers for sending plain text
+      const headers = {
+        'Content-Type': 'text/plain', // Set the correct content type
+        // Add any other headers needed, e.g., authorization
+      };
+  
+      // Send POST request to the inriverExtensionEndpoint with the serialized payload
+      await apiClient.post(inriverExtensionEndpoint, payloadString, { headers });
+      console.log("Sending request to inRiver");
+  
+      // Construct the endpoint URL for the main API
+      const endpoint = `/job/register/${selectedMarket}/${type}/${itemId}`;
+  
+      // For the main API, send JSON with appropriate headers
+      await apiClient.post(endpoint, payload, { headers: { 'Content-Type': 'application/json' } });
+      console.log("Sending request to Job API");
+  
+      // Show a success notification
+      showNotification(isPreview ? 'Preview job created' : 'Render job created', 'success');
+    } catch (error) {
+      // Handle errors
+      console.error('Error creating render job:', error);
+      showNotification('Error creating render job', 'error');
     }
-
-    // Construct the endpoint URL for the main API
-    const endpoint = `/job/register/${selectedMarket}/${type}/${itemId}`;
-
-    // Define the payload
-    const payload = {
-      market: selectedMarket,
-      type,
-      itemId,
-    };
-
-    // Perform the first API request to "inriverextension"
-    const inriverExtensionEndpoint = `/job/simulate/${selectedMarket}/${type}/${itemId}`;
-    const headers = {
-      'Content-Type': 'text/plain',
-      // Add any other headers needed, e.g., authorization
-    };
-    await apiClient.post(inriverExtensionEndpoint, payload, { headers });
-    console.log("Sending request to inRiver");
-
-    // Perform the main API request
-    await apiClient.post(endpoint, payload, { headers });
-    console.log("Sending request to Job API");
-
-    // Show a success notification
-    showNotification(isPreview ? 'Preview job created' : 'Render job created', 'success');
-  } catch (error) {
-    // Handle errors
-    console.error('Error creating render job:', error);
-    showNotification('Error creating render job', 'error');
-  }
-};
+  };
 
   // Fetch all unique markets
   const fetchAllMarkets = useCallback(async () => {
