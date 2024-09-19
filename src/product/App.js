@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './App.css';
 import apiClient from './apiClient';
+import inriverClient from './inriverClient';
+import inboundExtensionClient from './inboundExtensionClient';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCogs, faHistory, faThList, faPlay, faChevronDown, faChevronRight, faSpinner, faCircle } from '@fortawesome/free-solid-svg-icons';
 
 const App = () => {
-  const itemId = '3213124'; // Replace '3213124' with your actual constant item ID
-  const currentCategory = 'flooring'; // Replace with your logic to determine the current category
 
   // State Definitions
   const [selectedItem, setSelectedItem] = useState(null);
@@ -19,6 +19,8 @@ const App = () => {
   const [selectedMarket, setSelectedMarket] = useState(''); // Track selected market
   const [todaysVersions, setTodaysVersions] = useState([]); // Track today's versions
   const [todaysPreviews, setTodaysPreviews] = useState([]); // Track today's previews
+  const [itemId, setItemId] = useState('301'); // Initialize with the predefined '301'
+  const [currentCategory, setCurrentCategory] = useState('Dummy'); // Track the current category
 
   // Show notification function
   const showNotification = (message, type = 'success') => {
@@ -27,6 +29,88 @@ const App = () => {
       setNotification({ message: '', type: '' });
     }, 3000);
   };
+
+
+ // Fetch ProductTdsCategory as soon as possible
+ const fetchProductTdsCategory = useCallback(async () => {
+  try {
+    console.log(data);
+    
+    if (data !== null && data !== undefined) {
+      setItemId(data[0].id);
+    } 
+    
+    // Extract ProductTdsCategory value from fields
+    const productTdsCategoryField = data[0].fields.productTdsCategory;
+    console.log(productTdsCategoryField);
+
+    if (productTdsCategoryField && productTdsCategoryField.value) {
+      const productTdsCategoryValue = productTdsCategoryField.value;
+      console.log(`ProductTdsCategory value: ${productTdsCategoryValue}`);
+
+      // Fetch CVL values for TdsCategory
+      const cvlResponse = await inriverClient.get(`/api/v1.0.0/model/cvls/TdsCategory/values`);
+      console.log(cvlResponse);
+
+      // Find the matching CVL entry
+      const cvlValues = cvlResponse.data;
+      const matchingCvl = cvlValues.find((cvl) => cvl.value === productTdsCategoryValue);
+
+      if (matchingCvl) {
+        setCurrentCategory(matchingCvl.key); // Set the current category to the matching key
+        console.log(`Current category set to: ${matchingCvl.key}`);
+      } else {
+        console.warn('No matching CVL found for ProductTdsCategory value');
+      }
+    } else {
+      console.warn('ProductTdsCategory not found in field values');
+    }
+  } catch (error) {
+    console.error('Error fetching ProductTdsCategory or CVL values:', error);
+  }
+}, [data]);
+
+// Fetch the category before any other actions
+useEffect(() => {
+  fetchProductTdsCategory();
+}, [fetchProductTdsCategory]);
+
+// Check if the current category is valid
+const checkCategoryValidity = useCallback(async () => {
+  try {
+    const response = await apiClient.get('/configuration/categories');
+    const validCategories = response.data.map((category) => category.identifier);
+    setIsCategoryValid(validCategories.includes(currentCategory));
+  } catch (error) {
+    console.error('Error checking category validity:', error);
+    setIsCategoryValid(false); // Default to false if there's an error
+  }
+}, [currentCategory]);
+
+// Fetch other data when the application loads after category is fetched
+useEffect(() => {
+  if (currentCategory) {
+    checkCategoryValidity();
+  }
+}, [checkCategoryValidity, currentCategory]);
+
+// Other existing effects for fetching data...
+useEffect(() => {
+  fetchAllMarkets();
+  fetchJobsForAllMarkets();
+  fetchVersions();
+  fetchTodaysPreviews();
+
+  const interval = setInterval(() => {
+    fetchJobsForAllMarkets();
+    fetchVersions();
+    fetchTodaysPreviews();
+  }, 5000); // Poll every 5 seconds
+
+  return () => {
+    clearInterval(interval);
+  };
+}, [fetchAllMarkets, fetchJobsForAllMarkets, fetchVersions, fetchTodaysPreviews]);
 
 
   const handleRender = async (isPreview = false) => {
@@ -41,7 +125,7 @@ const App = () => {
       }
   
       // Construct the endpoint URL for the inriverextension
-      const inriverExtensionEndpoint = `/job/simulate/${selectedMarket}/${type}/${itemId}`;
+      const inriverExtensionEndpoint = `/BonaTdsConductor`;
   
       // Create the TdsRequest object as a payload
       const payload = {
@@ -54,14 +138,8 @@ const App = () => {
       // Convert the payload to a string since server expects `text/plain`
       const payloadString = JSON.stringify(payload);
   
-      // Headers for sending plain text
-      const headers = {
-        'Content-Type': 'text/plain', // Set the correct content type
-        // Add any other headers needed, e.g., authorization
-      };
-  
       // Send POST request to the inriverExtensionEndpoint with the serialized payload
-      await apiClient.post(inriverExtensionEndpoint, payloadString, { headers });
+      await inboundExtensionClient.post(inriverExtensionEndpoint, payloadString);
       console.log("Sending request to inRiver");
   
       // Construct the endpoint URL for the main API
@@ -123,17 +201,17 @@ const App = () => {
     }
   }, [itemId]);
 
-  // Check if the current category is valid
-  const checkCategoryValidity = useCallback(async () => {
-    try {
-      const response = await apiClient.get('/configuration/categories');
-      const validCategories = response.data.map((category) => category.identifier);
-      setIsCategoryValid(validCategories.includes(currentCategory));
-    } catch (error) {
-      console.error('Error checking category validity:', error);
-      setIsCategoryValid(false); // Default to false if there's an error
-    }
-  }, [currentCategory]);
+  // // Check if the current category is valid
+  // const checkCategoryValidity = useCallback(async () => {
+  //   try {
+  //     const response = await apiClient.get('/configuration/categories');
+  //     const validCategories = response.data.map((category) => category.identifier);
+  //     setIsCategoryValid(validCategories.includes(currentCategory));
+  //   } catch (error) {
+  //     console.error('Error checking category validity:', error);
+  //     setIsCategoryValid(false); // Default to false if there's an error
+  //   }
+  // }, [currentCategory]);
 
   // Fetch jobs for all markets using a single endpoint
   const fetchJobsForAllMarkets = useCallback(async () => {

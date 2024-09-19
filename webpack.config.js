@@ -3,43 +3,51 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 module.exports = (env, argv) => {
+  
   const isProduction = argv.mode === 'production';
 
+  
+
   return {
+
     entry: {
-      admin: './src/admin/index.js', // Ensure this file exists
-      product: './src/product/index.js', // Ensure this file exists
+      admin: './src/admin/index.js', // Entry for the Admin app
+      product: './src/product/index.js', // Entry for the Product app
     },
+
     output: {
       path: path.resolve(__dirname, 'dist'),
-      filename: '[name]/bundle.[contenthash].js', // Separate bundles for each app
-      clean: true, // Clean the output directory before emit
-      publicPath: '/', // Set public path to root for correct routing
+      filename: '[name]/bundle.asset.js', // Generates a unique hash for JS files
+      publicPath: '', // Use relative paths for standalone HTML files
+      clean: true, // Cleans the output directory before build
     },
+
+  
+
     module: {
       rules: [
         {
-          test: /\.(js|jsx)$/, // JavaScript and JSX files
+          test: /\.(js|jsx)$/, // Handle JavaScript and JSX files
           exclude: /node_modules/,
           use: {
             loader: 'babel-loader',
             options: {
-              presets: ['@babel/preset-env', '@babel/preset-react'],
+              presets: ['@babel/preset-env', '@babel/preset-react'], // Use Babel presets for React
             },
           },
         },
         {
-          test: /\.css$/, // CSS files
+          test: /\.css$/, // Handle CSS files
           use: [
-            isProduction ? MiniCssExtractPlugin.loader : 'style-loader',
+            isProduction ? MiniCssExtractPlugin.loader : 'style-loader', // Extract CSS in production
             'css-loader',
             {
-              loader: 'postcss-loader', // Add PostCSS loader for Tailwind and Autoprefixer
+              loader: 'postcss-loader', // PostCSS for Tailwind and Autoprefixer
               options: {
                 postcssOptions: {
                   plugins: [
-                    require('tailwindcss'),
-                    require('autoprefixer'),
+                    require('tailwindcss'), // TailwindCSS
+                    require('autoprefixer'), // Autoprefixer
                   ],
                 },
               },
@@ -47,55 +55,73 @@ module.exports = (env, argv) => {
           ],
         },
         {
-          test: /\.(png|jpg|jpeg|gif|svg)$/, // Image files
+          test: /\.(png|jpg|jpeg|gif|svg)$/, // Handle image files
           type: 'asset/resource',
           generator: {
-            filename: 'assets/images/[hash][ext][query]', // Output pattern for images
+            filename: 'assets/images/[hash][ext][query]', // Output pattern for images with unique hash
           },
         },
         {
-          test: /\.(woff|woff2|eot|ttf|otf)$/, // Font files
+          test: /\.(woff|woff2|eot|ttf|otf)$/, // Handle font files
           type: 'asset/resource',
           generator: {
-            filename: 'assets/fonts/[hash][ext][query]', // Output pattern for fonts
+            filename: 'assets/fonts/[hash][ext][query]', // Output pattern for fonts with unique hash
           },
         },
       ],
     },
+
     plugins: [
+      // Generate admin.html and inject CSS and JS
       new HtmlWebpackPlugin({
-        template: './public/admin.html', // Ensure this file exists
+        template: './public/admin.html', // Template for the Admin app
         filename: 'admin.html', // Output HTML for Admin app
         chunks: ['admin'], // Include only the Admin bundle
+        inject: 'body', // Ensure JS bundle is injected at the bottom of the body
       }),
+
+      // Generate product.html and inject CSS and JS
       new HtmlWebpackPlugin({
-        template: './public/product.html', // Ensure this file exists
+        template: './public/product.html', // Template for the Product app
         filename: 'product.html', // Output HTML for Product app
         chunks: ['product'], // Include only the Product bundle
+        inject: 'body', // Ensure JS bundle is injected at the bottom of the body
       }),
+
+      // Extract CSS into separate files with unique hash for each entry
       new MiniCssExtractPlugin({
-        filename: '[name]/styles.[contenthash].css', // Extract CSS into separate files in production
+        filename: '[name]/styles.css', // Extract CSS into separate files with unique hash
       }),
     ],
-    devServer: {
-      static: path.join(__dirname, 'dist'),
-      compress: true,
-      port: 8080,
-      open: true,
-      historyApiFallback: {
-        rewrites: [
-          { from: /^\/admin/, to: '/admin.html' }, // Serve Admin app at /admin
-          { from: /^\/product/, to: '/product.html' }, // Serve Product app at /product
-        ],
-      },
-    },
+
     resolve: {
-      extensions: ['.js', '.jsx'], // Resolve these extensions
+      extensions: ['.js', '.jsx'], // Resolve JS and JSX file extensions
     },
+
+    devtool: 'source-map',
+    
     optimization: {
+      minimize: false,
       splitChunks: {
-        chunks: 'all', // Enable code splitting
+        chunks: 'all', // Enable code splitting for better optimization
       },
     },
+
+    ...(isProduction
+      ? {} // No devServer for production
+      : {
+          devServer: {
+            static: path.join(__dirname, 'dist'),
+            compress: true,
+            port: 8080,
+            open: true,
+            historyApiFallback: {
+              rewrites: [
+                { from: /^\/admin/, to: '/admin.html' }, // Serve Admin app at /admin
+                { from: /^\/product/, to: '/product.html' }, // Serve Product app at /product
+              ],
+            },
+          },
+        }),
   };
 };
