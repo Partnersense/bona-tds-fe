@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './App.css';
 import apiClient from './apiClient';
 import inriverClient from './inriverClient';
@@ -21,6 +21,10 @@ const App = () => {
   const [todaysPreviews, setTodaysPreviews] = useState([]); // Track today's previews
   const [itemId, setItemId] = useState('301'); // Initialize with the predefined '301'
   const [currentCategory, setCurrentCategory] = useState('Dummy'); // Track the current category
+  const [newVersions, setNewVersions] = useState(new Set());
+  const [newPreviews, setNewPreviews] = useState(new Set());
+  const previousVersionsRef = useRef([]);
+  const previousPreviewsRef = useRef([]);
 
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -179,8 +183,18 @@ useEffect(() => {
     try {
       const response = await apiClient.get(`/configuration/items/${itemId}/versionHistory`);
       const sortedVersions = response.data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      
+      const newVersionsSet = new Set();
+      sortedVersions.forEach((version) => {
+        if (!previousVersionsRef.current.find(v => v.rowKey === version.rowKey)) {
+          newVersionsSet.add(version.rowKey);
+        }
+      });
+      
       setVersions(sortedVersions);
+      setNewVersions(newVersionsSet);
       fetchTodaysVersions(sortedVersions);
+      previousVersionsRef.current = sortedVersions;
     } catch (error) {
       console.error('Error fetching item versions:', error);
     }
@@ -194,19 +208,30 @@ useEffect(() => {
   }, [versions]);
 
   // Fetch today's previews
-    const fetchTodaysPreviews = useCallback(async () => {
-      try {
-        const response = await apiClient.get(`/configuration/items/${itemId}/files?isPreview=true`);
-        const files = response.data;
+  const fetchTodaysPreviews = useCallback(async () => {
+    try {
+      const response = await apiClient.get(`/configuration/items/${itemId}/files?isPreview=true`);
+      const files = response.data;
   
-        const today = new Date().toISOString().slice(0, 10);
-        const todaysFiles = files.filter((file) => new Date(file.lastModified).toISOString().startsWith(today))
-          .sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
-        setTodaysPreviews(todaysFiles);
-      } catch (error) {
-        console.error('Error fetching todays previews:', error);
-      }
-    }, [itemId]);
+      const today = new Date().toISOString().slice(0, 10);
+      const todaysFiles = files
+        .filter((file) => new Date(file.lastModified).toISOString().startsWith(today))
+        .sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+  
+      const newPreviewsSet = new Set();
+      todaysFiles.forEach((preview) => {
+        if (!previousPreviewsRef.current.find(p => p.fileName === preview.fileName)) {
+          newPreviewsSet.add(preview.fileName);
+        }
+      });
+  
+      setTodaysPreviews(todaysFiles);
+      setNewPreviews(newPreviewsSet);
+      previousPreviewsRef.current = todaysFiles;
+    } catch (error) {
+      console.error('Error fetching todays previews:', error);
+    }
+  }, [itemId]);
 
   // // Check if the current category is valid
   // const checkCategoryValidity = useCallback(async () => {
@@ -237,25 +262,23 @@ useEffect(() => {
   }, [itemId]);
 
   // Fetch data when the application loads
-useEffect(() => {
-  fetchAllMarkets();
-  checkCategoryValidity();
-  fetchJobsForAllMarkets(); // Fetch queues immediately on load
-  fetchVersions();
-  fetchTodaysPreviews();
-
-  // Set up polling for jobs, versions, and previews
-  const interval = setInterval(() => {
-    fetchJobsForAllMarkets();   // Poll jobs
-    fetchVersions();            // Poll versions
-    fetchTodaysPreviews();      // Poll previews
-  }, 5000); // Poll every 5 seconds
-
-  // Clean up intervals on component unmount or change
-  return () => {
-    clearInterval(interval);
-  };
-}, [fetchAllMarkets, checkCategoryValidity, fetchJobsForAllMarkets, fetchVersions, fetchTodaysPreviews]);
+  useEffect(() => {
+    fetchAllMarkets();
+    checkCategoryValidity();
+    fetchJobsForAllMarkets();
+    fetchVersions();
+    fetchTodaysPreviews();
+  
+    const interval = setInterval(() => {
+      fetchJobsForAllMarkets();
+      fetchVersions();
+      fetchTodaysPreviews();
+    }, 3000); // Poll every 3 seconds
+  
+    return () => {
+      clearInterval(interval);
+    };
+  }, [fetchAllMarkets, checkCategoryValidity, fetchJobsForAllMarkets, fetchVersions, fetchTodaysPreviews]);
 
   // Handle clicking on sidebar items
   const handleItemClick = (item) => {
@@ -440,7 +463,10 @@ const renderJobStatusIcon = (status) => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {todaysVersions.map((version) => (
-                    <tr key={`${version.fileName}${version.rowKey}`}>
+                    <tr 
+                      key={`${version.fileName}${version.rowKey}`}
+                      className={newVersions.has(version.rowKey) ? 'flash-row' : ''}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap">{version.rowKey}</td>
                       <td className="px-6 py-4 whitespace-nowrap">{version.market}</td>
                       <td className="px-6 py-4 whitespace-nowrap">{new Date(version.timestamp).toLocaleString()}</td>
@@ -474,7 +500,10 @@ const renderJobStatusIcon = (status) => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {todaysPreviews.map((preview) => (
-                    <tr key={`${preview.fileName}${preview.rowKey}`}>
+                    <tr 
+                      key={`${preview.fileName}${preview.rowKey}`}
+                      className={newPreviews.has(preview.fileName) ? 'flash-row' : ''}
+                    >
                       <td className="px-6 py-4 whitespace-nowrap">{preview.fileName}</td>
                       <td className="px-6 py-4 whitespace-nowrap">{new Date(preview.lastModified).toLocaleString()}</td>
                       <td className="px-6 py-4 whitespace-nowrap">

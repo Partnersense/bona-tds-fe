@@ -135,7 +135,16 @@ var App = function App() {
     _useState24 = _slicedToArray(_useState23, 2),
     currentCategory = _useState24[0],
     setCurrentCategory = _useState24[1]; // Track the current category
-
+  var _useState25 = (0,react.useState)(new Set()),
+    _useState26 = _slicedToArray(_useState25, 2),
+    newVersions = _useState26[0],
+    setNewVersions = _useState26[1];
+  var _useState27 = (0,react.useState)(new Set()),
+    _useState28 = _slicedToArray(_useState27, 2),
+    newPreviews = _useState28[0],
+    setNewPreviews = _useState28[1];
+  var previousVersionsRef = (0,react.useRef)([]);
+  var previousPreviewsRef = (0,react.useRef)([]);
   var delay = function delay(ms) {
     return new Promise(function (resolve) {
       return setTimeout(resolve, ms);
@@ -368,7 +377,7 @@ var App = function App() {
     }, _callee4, null, [[0, 7]]);
   })), []);
   var fetchVersions = (0,react.useCallback)(/*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee5() {
-    var response, sortedVersions;
+    var response, sortedVersions, newVersionsSet;
     return _regeneratorRuntime().wrap(function _callee5$(_context5) {
       while (1) switch (_context5.prev = _context5.next) {
         case 0:
@@ -380,19 +389,29 @@ var App = function App() {
           sortedVersions = response.data.sort(function (a, b) {
             return new Date(b.timestamp) - new Date(a.timestamp);
           });
+          newVersionsSet = new Set();
+          sortedVersions.forEach(function (version) {
+            if (!previousVersionsRef.current.find(function (v) {
+              return v.rowKey === version.rowKey;
+            })) {
+              newVersionsSet.add(version.rowKey);
+            }
+          });
           setVersions(sortedVersions);
+          setNewVersions(newVersionsSet);
           fetchTodaysVersions(sortedVersions);
-          _context5.next = 12;
+          previousVersionsRef.current = sortedVersions;
+          _context5.next = 16;
           break;
-        case 9:
-          _context5.prev = 9;
+        case 13:
+          _context5.prev = 13;
           _context5.t0 = _context5["catch"](0);
           console.error('Error fetching item versions:', _context5.t0);
-        case 12:
+        case 16:
         case "end":
           return _context5.stop();
       }
-    }, _callee5, null, [[0, 9]]);
+    }, _callee5, null, [[0, 13]]);
   })), [itemId]);
 
   // Modified fetchTodaysVersions function to maintain sorting
@@ -407,7 +426,7 @@ var App = function App() {
 
   // Fetch today's previews
   var fetchTodaysPreviews = (0,react.useCallback)(/*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee6() {
-    var response, files, today, todaysFiles;
+    var response, files, today, todaysFiles, newPreviewsSet;
     return _regeneratorRuntime().wrap(function _callee6$(_context6) {
       while (1) switch (_context6.prev = _context6.next) {
         case 0:
@@ -423,18 +442,28 @@ var App = function App() {
           }).sort(function (a, b) {
             return new Date(b.lastModified) - new Date(a.lastModified);
           });
+          newPreviewsSet = new Set();
+          todaysFiles.forEach(function (preview) {
+            if (!previousPreviewsRef.current.find(function (p) {
+              return p.fileName === preview.fileName;
+            })) {
+              newPreviewsSet.add(preview.fileName);
+            }
+          });
           setTodaysPreviews(todaysFiles);
-          _context6.next = 13;
+          setNewPreviews(newPreviewsSet);
+          previousPreviewsRef.current = todaysFiles;
+          _context6.next = 17;
           break;
-        case 10:
-          _context6.prev = 10;
+        case 14:
+          _context6.prev = 14;
           _context6.t0 = _context6["catch"](0);
           console.error('Error fetching todays previews:', _context6.t0);
-        case 13:
+        case 17:
         case "end":
           return _context6.stop();
       }
-    }, _callee6, null, [[0, 10]]);
+    }, _callee6, null, [[0, 14]]);
   })), [itemId]);
 
   // // Check if the current category is valid
@@ -483,18 +512,15 @@ var App = function App() {
   (0,react.useEffect)(function () {
     fetchAllMarkets();
     checkCategoryValidity();
-    fetchJobsForAllMarkets(); // Fetch queues immediately on load
+    fetchJobsForAllMarkets();
     fetchVersions();
     fetchTodaysPreviews();
-
-    // Set up polling for jobs, versions, and previews
     var interval = setInterval(function () {
-      fetchJobsForAllMarkets(); // Poll jobs
-      fetchVersions(); // Poll versions
-      fetchTodaysPreviews(); // Poll previews
-    }, 5000); // Poll every 5 seconds
+      fetchJobsForAllMarkets();
+      fetchVersions();
+      fetchTodaysPreviews();
+    }, 3000); // Poll every 3 seconds
 
-    // Clean up intervals on component unmount or change
     return function () {
       clearInterval(interval);
     };
@@ -680,7 +706,8 @@ var App = function App() {
     className: "bg-white divide-y divide-gray-200"
   }, todaysVersions.map(function (version) {
     return /*#__PURE__*/react.createElement("tr", {
-      key: "".concat(version.fileName).concat(version.rowKey)
+      key: "".concat(version.fileName).concat(version.rowKey),
+      className: newVersions.has(version.rowKey) ? 'flash-row' : ''
     }, /*#__PURE__*/react.createElement("td", {
       className: "px-6 py-4 whitespace-nowrap"
     }, version.rowKey), /*#__PURE__*/react.createElement("td", {
@@ -712,7 +739,8 @@ var App = function App() {
     className: "bg-white divide-y divide-gray-200"
   }, todaysPreviews.map(function (preview) {
     return /*#__PURE__*/react.createElement("tr", {
-      key: "".concat(preview.fileName).concat(preview.rowKey)
+      key: "".concat(preview.fileName).concat(preview.rowKey),
+      className: newPreviews.has(preview.fileName) ? 'flash-row' : ''
     }, /*#__PURE__*/react.createElement("td", {
       className: "px-6 py-4 whitespace-nowrap"
     }, preview.fileName), /*#__PURE__*/react.createElement("td", {

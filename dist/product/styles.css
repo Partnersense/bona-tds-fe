@@ -839,7 +839,14 @@ video {
     min-height: 800px;
 }
 
+@keyframes flash {
+  0%, 50%, 100% { background-color: transparent; }
+  25%, 75% { background-color: yellow; }
+}
 
+.flash-row {
+  animation: flash 2s linear;
+}
 
  /* Pulsating Blue */
 .pulse-blue {
