@@ -22,6 +22,8 @@ const App = () => {
   const [itemId, setItemId] = useState('301'); // Initialize with the predefined '301'
   const [currentCategory, setCurrentCategory] = useState('Dummy'); // Track the current category
 
+  const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
   // Show notification function
   const showNotification = (message, type = 'success') => {
     setNotification({ message, type });
@@ -124,23 +126,6 @@ useEffect(() => {
         return;
       }
   
-      // Construct the endpoint URL for the inriverextension
-      const inriverExtensionEndpoint = `/BonaTdsConductor`;
-  
-      // Create the TdsRequest object as a payload
-      const payload = {
-        EntityId: itemId,
-        Market: selectedMarket,
-        Category: currentCategory,
-        Type: type
-      };
-  
-      // Convert the payload to a string since server expects `text/plain`
-      const payloadString = JSON.stringify(payload);
-  
-      // Send POST request to the inriverExtensionEndpoint with the serialized payload
-      await inboundExtensionClient.post(inriverExtensionEndpoint, payloadString);
-      console.log("Sending request to inRiver");
   
       // Construct the endpoint URL for the main API
       const endpoint = `/job/register/${selectedMarket}/${type}/${itemId}`;
@@ -148,6 +133,28 @@ useEffect(() => {
       // For the main API, send JSON with appropriate headers
       await apiClient.post(endpoint, payload, { headers: { 'Content-Type': 'application/json' } });
       console.log("Sending request to Job API");
+
+      await delay(1000);
+
+      // Construct the endpoint URL for the inriverextension
+      const inriverExtensionEndpoint = `/BonaTdsConductor`;
+        
+      // Create the TdsRequest object as a payload
+      const payload = {
+        EntityId: itemId,
+        Market: selectedMarket,
+        Category: currentCategory,
+        Type: type
+      };
+
+      // Convert the payload to a string since server expects `text/plain`
+      const payloadString = JSON.stringify(payload);
+
+      // Send POST request to the inriverExtensionEndpoint with the serialized payload
+      await inboundExtensionClient.post(inriverExtensionEndpoint, payloadString);
+      console.log("Sending request to inRiver");
+
+
   
       // Show a success notification
       showNotification(isPreview ? 'Preview job created' : 'Render job created', 'success');
@@ -168,18 +175,18 @@ useEffect(() => {
     }
   }, []);
 
-  // Fetch versions for the selected item using itemId
   const fetchVersions = useCallback(async () => {
     try {
       const response = await apiClient.get(`/configuration/items/${itemId}/versionHistory`);
-      setVersions(response.data);
-      fetchTodaysVersions(response.data);
+      const sortedVersions = response.data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      setVersions(sortedVersions);
+      fetchTodaysVersions(sortedVersions);
     } catch (error) {
       console.error('Error fetching item versions:', error);
     }
   }, [itemId]);
 
-  // Fetch today's versions
+  // Modified fetchTodaysVersions function to maintain sorting
   const fetchTodaysVersions = useCallback((versionsData = versions) => {
     const today = new Date().toISOString().slice(0, 10);
     const filteredVersions = versionsData.filter((version) => version.timestamp.startsWith(today));
@@ -187,19 +194,19 @@ useEffect(() => {
   }, [versions]);
 
   // Fetch today's previews
-  const fetchTodaysPreviews = useCallback(async () => {
-    try {
-      const response = await apiClient.get(`/configuration/items/${itemId}/files?isPreview=true`);
-      const files = response.data;
-
-      // Filter files from today
-      const today = new Date().toISOString().slice(0, 10);
-      const todaysFiles = files.filter((file) => new Date(file.lastModified).toISOString().startsWith(today));
-      setTodaysPreviews(todaysFiles);
-    } catch (error) {
-      console.error('Error fetching todays previews:', error);
-    }
-  }, [itemId]);
+    const fetchTodaysPreviews = useCallback(async () => {
+      try {
+        const response = await apiClient.get(`/configuration/items/${itemId}/files?isPreview=true`);
+        const files = response.data;
+  
+        const today = new Date().toISOString().slice(0, 10);
+        const todaysFiles = files.filter((file) => new Date(file.lastModified).toISOString().startsWith(today))
+          .sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+        setTodaysPreviews(todaysFiles);
+      } catch (error) {
+        console.error('Error fetching todays previews:', error);
+      }
+    }, [itemId]);
 
   // // Check if the current category is valid
   // const checkCategoryValidity = useCallback(async () => {
@@ -271,19 +278,22 @@ useEffect(() => {
     return acc;
   }, {});
 
-  // Check if category validity is still loading
-  if (isCategoryValid === null) {
-    return <p>Loading...</p>;
-  }
+  // // Check if category validity is still loading
+  // if (isCategoryValid === null) {
+  //   return <p>Loading...</p>;
+  // }
 
-  // Display message if category is not valid
-  if (!isCategoryValid) {
-    return (
-      <div className="centered-error">
-        The current category for this product is not supported.
-      </div>
-    );
-  }
+  // // Display message if category is not valid
+  // if (!isCategoryValid) {
+  //   return (
+  //     <div className="centered-error">
+  //       The current category for this product is not supported.
+  //     </div>
+  //   );
+  // }
+
+
+
 // Render job status icon based on job status with pulsing effect
 const renderJobStatusIcon = (status) => {
   switch (status) {

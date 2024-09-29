@@ -136,6 +136,12 @@ var App = function App() {
     currentCategory = _useState24[0],
     setCurrentCategory = _useState24[1]; // Track the current category
 
+  var delay = function delay(ms) {
+    return new Promise(function (resolve) {
+      return setTimeout(resolve, ms);
+    });
+  };
+
   // Show notification function
   var showNotification = function showNotification(message) {
     var type = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 'success';
@@ -270,10 +276,10 @@ var App = function App() {
     var _ref3 = _asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee3() {
       var isPreview,
         type,
+        endpoint,
         inriverExtensionEndpoint,
         payload,
         payloadString,
-        endpoint,
         _args3 = arguments;
       return _regeneratorRuntime().wrap(function _callee3$(_context3) {
         while (1) switch (_context3.prev = _context3.next) {
@@ -289,6 +295,19 @@ var App = function App() {
             showNotification('Please select a market', 'error');
             return _context3.abrupt("return");
           case 6:
+            // Construct the endpoint URL for the main API
+            endpoint = "/job/register/".concat(selectedMarket, "/").concat(type, "/").concat(itemId); // For the main API, send JSON with appropriate headers
+            _context3.next = 9;
+            return product_apiClient.post(endpoint, payload, {
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            });
+          case 9:
+            console.log("Sending request to Job API");
+            _context3.next = 12;
+            return delay(1000);
+          case 12:
             // Construct the endpoint URL for the inriverextension
             inriverExtensionEndpoint = "/BonaTdsConductor"; // Create the TdsRequest object as a payload
             payload = {
@@ -298,37 +317,26 @@ var App = function App() {
               Type: type
             }; // Convert the payload to a string since server expects `text/plain`
             payloadString = JSON.stringify(payload); // Send POST request to the inriverExtensionEndpoint with the serialized payload
-            _context3.next = 11;
+            _context3.next = 17;
             return product_inboundExtensionClient.post(inriverExtensionEndpoint, payloadString);
-          case 11:
+          case 17:
             console.log("Sending request to inRiver");
-
-            // Construct the endpoint URL for the main API
-            endpoint = "/job/register/".concat(selectedMarket, "/").concat(type, "/").concat(itemId); // For the main API, send JSON with appropriate headers
-            _context3.next = 15;
-            return product_apiClient.post(endpoint, payload, {
-              headers: {
-                'Content-Type': 'application/json'
-              }
-            });
-          case 15:
-            console.log("Sending request to Job API");
 
             // Show a success notification
             showNotification(isPreview ? 'Preview job created' : 'Render job created', 'success');
-            _context3.next = 23;
+            _context3.next = 25;
             break;
-          case 19:
-            _context3.prev = 19;
+          case 21:
+            _context3.prev = 21;
             _context3.t0 = _context3["catch"](1);
             // Handle errors
             console.error('Error creating render job:', _context3.t0);
             showNotification('Error creating render job', 'error');
-          case 23:
+          case 25:
           case "end":
             return _context3.stop();
         }
-      }, _callee3, null, [[1, 19]]);
+      }, _callee3, null, [[1, 21]]);
     }));
     return function handleRender() {
       return _ref3.apply(this, arguments);
@@ -359,10 +367,8 @@ var App = function App() {
       }
     }, _callee4, null, [[0, 7]]);
   })), []);
-
-  // Fetch versions for the selected item using itemId
   var fetchVersions = (0,react.useCallback)(/*#__PURE__*/_asyncToGenerator(/*#__PURE__*/_regeneratorRuntime().mark(function _callee5() {
-    var response;
+    var response, sortedVersions;
     return _regeneratorRuntime().wrap(function _callee5$(_context5) {
       while (1) switch (_context5.prev = _context5.next) {
         case 0:
@@ -371,22 +377,25 @@ var App = function App() {
           return product_apiClient.get("/configuration/items/".concat(itemId, "/versionHistory"));
         case 3:
           response = _context5.sent;
-          setVersions(response.data);
-          fetchTodaysVersions(response.data);
-          _context5.next = 11;
+          sortedVersions = response.data.sort(function (a, b) {
+            return new Date(b.timestamp) - new Date(a.timestamp);
+          });
+          setVersions(sortedVersions);
+          fetchTodaysVersions(sortedVersions);
+          _context5.next = 12;
           break;
-        case 8:
-          _context5.prev = 8;
+        case 9:
+          _context5.prev = 9;
           _context5.t0 = _context5["catch"](0);
           console.error('Error fetching item versions:', _context5.t0);
-        case 11:
+        case 12:
         case "end":
           return _context5.stop();
       }
-    }, _callee5, null, [[0, 8]]);
+    }, _callee5, null, [[0, 9]]);
   })), [itemId]);
 
-  // Fetch today's versions
+  // Modified fetchTodaysVersions function to maintain sorting
   var fetchTodaysVersions = (0,react.useCallback)(function () {
     var versionsData = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : versions;
     var today = new Date().toISOString().slice(0, 10);
@@ -407,10 +416,12 @@ var App = function App() {
           return product_apiClient.get("/configuration/items/".concat(itemId, "/files?isPreview=true"));
         case 3:
           response = _context6.sent;
-          files = response.data; // Filter files from today
+          files = response.data;
           today = new Date().toISOString().slice(0, 10);
           todaysFiles = files.filter(function (file) {
             return new Date(file.lastModified).toISOString().startsWith(today);
+          }).sort(function (a, b) {
+            return new Date(b.lastModified) - new Date(a.lastModified);
           });
           setTodaysPreviews(todaysFiles);
           _context6.next = 13;
@@ -509,17 +520,20 @@ var App = function App() {
     return acc;
   }, {});
 
-  // Check if category validity is still loading
-  if (isCategoryValid === null) {
-    return /*#__PURE__*/react.createElement("p", null, "Loading...");
-  }
+  // // Check if category validity is still loading
+  // if (isCategoryValid === null) {
+  //   return <p>Loading...</p>;
+  // }
 
-  // Display message if category is not valid
-  if (!isCategoryValid) {
-    return /*#__PURE__*/react.createElement("div", {
-      className: "centered-error"
-    }, "The current category for this product is not supported.");
-  }
+  // // Display message if category is not valid
+  // if (!isCategoryValid) {
+  //   return (
+  //     <div className="centered-error">
+  //       The current category for this product is not supported.
+  //     </div>
+  //   );
+  // }
+
   // Render job status icon based on job status with pulsing effect
   var renderJobStatusIcon = function renderJobStatusIcon(status) {
     switch (status) {
