@@ -43,3 +43,28 @@ button:hover .faEdit, button:hover .faTrash {
 .button-green .fa-check {
     margin-right: 0.5rem; /* Adjust icon spacing */
 }
+
+/* Spinner Styles */
+.spinner {
+    display: inline-block;
+    width: 12px; /* Smaller size for notification */
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3); /* Light border */
+    border-radius: 50%;
+    border-top-color: #fff; /* White top border */
+    animation: spin 0.8s linear infinite;
+  }
+  
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  
+  /* Center spinner for full-page loading */
+  .center-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* Full height to center vertically */
+  }
