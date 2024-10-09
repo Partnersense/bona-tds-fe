@@ -75,6 +75,8 @@ function _unsupportedIterableToArray(r, a) { if (r) { if ("string" == typeof r) 
 function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length); for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e]; return n; }
 function _iterableToArrayLimit(r, l) { var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"]; if (null != t) { var e, n, i, u, a = [], f = !0, o = !1; try { if (i = (t = t.call(r)).next, 0 === l) { if (Object(t) !== t) return; f = !1; } else for (; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0); } catch (r) { o = !0, n = r; } finally { try { if (!f && null != t["return"] && (u = t["return"](), Object(u) !== u)) return; } finally { if (o) throw n; } } return a; } }
 function _arrayWithHoles(r) { if (Array.isArray(r)) return r; }
+var globalData = window.data && window.data[0] || {};
+console.log('Initial global data:', globalData);
 
 
 
@@ -127,22 +129,25 @@ var App = function App() {
     _useState20 = _slicedToArray(_useState19, 2),
     todaysPreviews = _useState20[0],
     setTodaysPreviews = _useState20[1]; // Track today's previews
-  var _useState21 = (0,react.useState)('301'),
+  var itemId = (0,react.useMemo)(function () {
+    return globalData.id || null;
+  }, []);
+  var _useState21 = (0,react.useState)(function () {
+      var _globalData$fields;
+      // Assuming the category is stored in a field. Adjust this if it's stored differently.
+      return ((_globalData$fields = globalData.fields) === null || _globalData$fields === void 0 || (_globalData$fields = _globalData$fields.productTdsCategory) === null || _globalData$fields === void 0 ? void 0 : _globalData$fields.value) || null;
+    }),
     _useState22 = _slicedToArray(_useState21, 2),
-    itemId = _useState22[0],
-    setItemId = _useState22[1]; // Initialize with the predefined '301'
-  var _useState23 = (0,react.useState)('Dummy'),
+    currentCategory = _useState22[0],
+    setCurrentCategory = _useState22[1];
+  var _useState23 = (0,react.useState)(new Set()),
     _useState24 = _slicedToArray(_useState23, 2),
-    currentCategory = _useState24[0],
-    setCurrentCategory = _useState24[1]; // Track the current category
+    newVersions = _useState24[0],
+    setNewVersions = _useState24[1];
   var _useState25 = (0,react.useState)(new Set()),
     _useState26 = _slicedToArray(_useState25, 2),
-    newVersions = _useState26[0],
-    setNewVersions = _useState26[1];
-  var _useState27 = (0,react.useState)(new Set()),
-    _useState28 = _slicedToArray(_useState27, 2),
-    newPreviews = _useState28[0],
-    setNewPreviews = _useState28[1];
+    newPreviews = _useState26[0],
+    setNewPreviews = _useState26[1];
   var previousVersionsRef = (0,react.useRef)([]);
   var previousPreviewsRef = (0,react.useRef)([]);
   var delay = function delay(ms) {
@@ -150,6 +155,25 @@ var App = function App() {
       return setTimeout(resolve, ms);
     });
   };
+  console.log('Component initialization - itemId:', itemId, 'currentCategory:', currentCategory);
+  (0,react.useEffect)(function () {
+    var logDataChanges = function logDataChanges() {
+      var _currentData$fields;
+      var currentData = window.data && window.data[0] || {};
+      console.log('Current global data:', currentData);
+      console.log('Current itemId:', currentData.id);
+      console.log('Current category:', (_currentData$fields = currentData.fields) === null || _currentData$fields === void 0 || (_currentData$fields = _currentData$fields.productTdsCategory) === null || _currentData$fields === void 0 ? void 0 : _currentData$fields.value);
+    };
+
+    // Log initial data
+    logDataChanges();
+
+    // Set up an interval to check for changes (adjust interval as needed)
+    var dataCheckInterval = setInterval(logDataChanges, 5000);
+    return function () {
+      return clearInterval(dataCheckInterval);
+    };
+  }, []);
 
   // Show notification function
   var showNotification = function showNotification(message) {

@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+const globalData = window.data && window.data[0] || {};
+console.log('Initial global data:', globalData);
+
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import './App.css';
 import apiClient from './apiClient';
 import inriverClient from './inriverClient';
@@ -19,14 +22,36 @@ const App = () => {
   const [selectedMarket, setSelectedMarket] = useState(''); // Track selected market
   const [todaysVersions, setTodaysVersions] = useState([]); // Track today's versions
   const [todaysPreviews, setTodaysPreviews] = useState([]); // Track today's previews
-  const [itemId, setItemId] = useState('301'); // Initialize with the predefined '301'
-  const [currentCategory, setCurrentCategory] = useState('Dummy'); // Track the current category
+  const itemId = useMemo(() => globalData.id || null, []);
+  const [currentCategory, setCurrentCategory] = useState(() => {
+    // Assuming the category is stored in a field. Adjust this if it's stored differently.
+    return globalData.fields?.productTdsCategory?.value || null;
+  });
   const [newVersions, setNewVersions] = useState(new Set());
   const [newPreviews, setNewPreviews] = useState(new Set());
   const previousVersionsRef = useRef([]);
   const previousPreviewsRef = useRef([]);
 
   const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  console.log('Component initialization - itemId:', itemId, 'currentCategory:', currentCategory);
+
+  useEffect(() => {
+    const logDataChanges = () => {
+      const currentData = window.data && window.data[0] || {};
+      console.log('Current global data:', currentData);
+      console.log('Current itemId:', currentData.id);
+      console.log('Current category:', currentData.fields?.productTdsCategory?.value);
+    };
+  
+    // Log initial data
+    logDataChanges();
+  
+    // Set up an interval to check for changes (adjust interval as needed)
+    const dataCheckInterval = setInterval(logDataChanges, 5000);
+  
+    return () => clearInterval(dataCheckInterval);
+  }, []);
 
   // Show notification function
   const showNotification = (message, type = 'success') => {
